@@ -1,0 +1,1551 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FreeAir2Lox-Bridge - Loxone Integration</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-dark: #1a1d26;
+            --bg-secondary: #0d1117;
+            --bg-tertiary: #161b22;
+            --border-color: #30363d;
+            --text-primary: #f0f6fc;
+            --text-secondary: #e0e0e0;
+            --text-muted: #8b949e;
+            --accent-green: #7FB619;
+            --accent-green-light: #A4C639;
+            --accent-green-dark: #5A9200;
+            --accent-yellow: #F5C842;
+            --accent-red: #f85149;
+            --shadow: 0 3px 12px rgba(0, 0, 0, 0.4);
+        }
+
+        html, body {
+            height: 100%;
+            width: 100%;
+            background-color: var(--bg-dark);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Navigation */
+        .navbar {
+            background-color: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow);
+            z-index: 100;
+        }
+
+        .navbar-brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--accent-green);
+            text-decoration: none;
+        }
+
+        .navbar-brand i {
+            font-size: 2rem;
+        }
+
+        .navbar-right {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+        }
+
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            background-color: var(--accent-green-dark);
+            color: #f0f6fc;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .status-badge::before {
+            content: '';
+            width: 8px;
+            height: 8px;
+            background-color: rgba(255, 255, 255, 0.5);
+            border-radius: 50%;
+            animation: blink 2s infinite;
+        }
+
+        .btn-header-action {
+            transition: all 0.2s ease;
+        }
+
+        .btn-header-action:hover {
+            background-color: rgba(127, 182, 25, 0.15) !important;
+            transform: translateY(-2px);
+        }
+
+        .btn-header-action:active {
+            transform: translateY(0);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @keyframes spin-indicator {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Update Status Indicator Styles */
+        #update-status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.4rem 0.8rem;
+            border-radius: 4px;
+            font-size: 0.85rem;
+            color: var(--accent-green);
+            transition: all 0.3s ease;
+            white-space: nowrap;
+            position: relative;
+        }
+
+        #update-status-indicator:hover::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            top: 130%;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--accent-green);
+            color: var(--accent-green);
+            padding: 0.5rem 0.75rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            white-space: nowrap;
+            z-index: 1000;
+            pointer-events: none;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        #update-status-indicator:hover::before {
+            content: '';
+            position: absolute;
+            top: 120%;
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: var(--accent-green);
+            z-index: 1000;
+            pointer-events: none;
+        }
+
+        #update-status-indicator.status-ok {
+            color: var(--accent-green);
+        }
+
+        #update-status-indicator.status-warning {
+            color: var(--accent-yellow);
+        }
+
+        #update-status-indicator.status-warning:hover::after {
+            border-color: var(--accent-yellow);
+            color: var(--accent-yellow);
+        }
+
+        #update-status-indicator.status-warning:hover::before {
+            border-bottom-color: var(--accent-yellow);
+        }
+
+        #update-status-indicator.status-error {
+            color: #f85149;
+        }
+
+        #update-status-indicator.status-error:hover::after {
+            border-color: #f85149;
+            color: #f85149;
+        }
+
+        #update-status-indicator.status-error:hover::before {
+            border-bottom-color: #f85149;
+        }
+
+        #update-status-indicator.status-loading #update-status-icon {
+            display: inline-block;
+            animation: spin-indicator 1s linear infinite;
+        }
+
+        /* Alert Styles */
+        .alert {
+            padding: 12px 15px;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            line-height: 1.5;
+        }
+
+        .alert-error {
+            background-color: rgba(248, 81, 73, 0.1);
+            border: 1px solid rgba(248, 81, 73, 0.3);
+            color: #f85149;
+        }
+
+        .alert-success {
+            background-color: rgba(125, 253, 124, 0.1);
+            border: 1px solid rgba(125, 253, 124, 0.3);
+            color: #7dfd7c;
+        }
+
+        .alert-warning {
+            background-color: rgba(245, 200, 66, 0.1);
+            border: 1px solid var(--accent-yellow);
+            color: #d4af37;
+        }
+
+        .current-time {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            font-family: 'Courier New', monospace;
+        }
+
+        /* Main Container */
+        .container-main {
+            flex: 1;
+            overflow-y: auto;
+            padding: 2rem;
+        }
+
+        .page-title {
+            font-size: 2rem;
+            font-weight: 700;
+            margin-bottom: 2rem;
+            color: var(--text-primary);
+        }
+
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+
+        .section-title:first-child {
+            margin-top: 0;
+        }
+
+        /* Widgets Grid */
+        .widgets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+
+        .widget {
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(88, 166, 255, 0.05) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .widget::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(127, 182, 25, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .widget:hover::before {
+            top: -20%;
+            right: -20%;
+        }
+
+        .widget:hover {
+            border-color: var(--accent-green);
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(127, 182, 25, 0.1) 100%);
+            transform: translateY(-2px);
+        }
+
+        .widget.online {
+            border-left: 4px solid var(--accent-green);
+        }
+
+        .widget.warning {
+            border-left: 4px solid var(--accent-yellow);
+        }
+
+        .widget.error {
+            border-left: 4px solid var(--accent-red);
+        }
+
+        .widget-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .widget-location {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            font-weight: 600;
+        }
+
+        .widget-icon {
+            font-size: 1.5rem;
+            color: var(--accent-green);
+            opacity: 0.6;
+        }
+
+        .widget-title {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+
+        .widget-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .widget-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-green);
+            margin-top: 1rem;
+        }
+
+        /* Cards Grid */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Devices Dashboard Grid */
+        .devices-dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        /* Device Status Card */
+        .device-status-card {
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(88, 166, 255, 0.05) 100%);
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .device-status-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -50%;
+            width: 200px;
+            height: 200px;
+            background: radial-gradient(circle, rgba(127, 182, 25, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .device-status-card:hover::before {
+            top: -20%;
+            right: -20%;
+        }
+
+        .device-status-card.online {
+            border-color: rgba(127, 182, 25, 0.5);
+        }
+
+        .device-status-card.offline {
+            border-color: rgba(248, 81, 73, 0.5);
+            opacity: 0.7;
+        }
+
+        .device-status-card:hover {
+            border-color: var(--accent-green);
+            box-shadow: 0 8px 24px rgba(127, 182, 25, 0.15);
+            transform: translateY(-2px);
+        }
+
+        .device-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .device-card-name {
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .device-card-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .device-status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+        }
+
+        .device-status-dot.offline {
+            background-color: var(--accent-red);
+        }
+
+        .device-last-update {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .device-measurements {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            margin-bottom: 1rem;
+            position: relative;
+            z-index: 2;
+        }
+
+        .measurement-box {
+            background-color: rgba(0, 0, 0, 0.2);
+            padding: 0.75rem;
+            border-radius: 4px;
+            border-left: 3px solid var(--accent-green);
+        }
+
+        .measurement-box.warning {
+            border-left-color: var(--accent-yellow);
+        }
+
+        .measurement-box.error {
+            border-left-color: var(--accent-red);
+        }
+
+        .measurement-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            margin-bottom: 0.25rem;
+        }
+
+        .measurement-value {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--accent-green);
+        }
+
+        .measurement-unit {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            margin-left: 0.25rem;
+        }
+
+        .device-quick-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            position: relative;
+            z-index: 2;
+        }
+
+        .device-action-btn {
+            flex: 1;
+            min-width: 80px;
+            padding: 0.5rem 0.75rem;
+            background-color: rgba(127, 182, 25, 0.15);
+            border: 1px solid rgba(127, 182, 25, 0.3);
+            color: var(--accent-green);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.8rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .device-action-btn:hover {
+            background-color: rgba(127, 182, 25, 0.3);
+            border-color: var(--accent-green);
+        }
+
+        .device-action-btn.active {
+            background-color: var(--accent-green);
+            color: var(--bg-dark);
+        }
+
+        /* Card Panel */
+        .card-panel {
+            background: linear-gradient(135deg, var(--bg-tertiary) 0%, rgba(88, 166, 255, 0.02) 100%);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .card-panel:hover {
+            border-color: var(--accent-green);
+            box-shadow: 0 8px 24px rgba(127, 182, 25, 0.1);
+        }
+
+        .card-panel-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(88, 166, 255, 0.05);
+        }
+
+        .card-panel-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+
+        .card-panel-icon {
+            color: var(--accent-green);
+            font-size: 1.3rem;
+        }
+
+        .btn-icon {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 4px;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+        }
+
+        .btn-icon:hover {
+            background-color: rgba(127, 182, 25, 0.1);
+            color: var(--accent-green);
+        }
+
+        .card-panel-body {
+            padding: 1.5rem;
+        }
+
+        /* Form Styles */
+        .form-group {
+            margin-bottom: 1.25rem;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--accent-green);
+            background-color: rgba(88, 166, 255, 0.05);
+            box-shadow: 0 0 0 3px rgba(127, 182, 25, 0.1);
+        }
+
+        .form-group input::placeholder {
+            color: var(--text-muted);
+        }
+
+        /* Buttons */
+        .btn-primary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background-color: var(--accent-green);
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            justify-content: center;
+        }
+
+        .btn-primary:hover {
+            background-color: #35d058;
+            box-shadow: 0 4px 12px rgba(63, 185, 80, 0.3);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.75rem 1.5rem;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-control {
+            padding: 0.6rem 1.2rem;
+            background-color: var(--bg-tertiary);
+            color: var(--text-secondary);
+            border: 2px solid var(--border-color);
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-control:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .btn-control.active {
+            background-color: var(--accent-green);
+            color: white;
+            border-color: var(--accent-green);
+            box-shadow: 0 0 8px rgba(127, 182, 25, 0.3);
+        }
+        .btn-secondary:hover {
+            background-color: rgba(127, 182, 25, 0.1);
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        /* Device List */
+        .device-item {
+            padding: 1rem;
+            background-color: rgba(88, 166, 255, 0.02);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            margin-bottom: 0.75rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .device-item:hover {
+            background-color: rgba(88, 166, 255, 0.08);
+            border-color: var(--accent-green);
+        }
+
+        .device-info {
+            flex: 1;
+        }
+
+        .device-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+
+        .device-meta {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        .device-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .status-indicator {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background-color: var(--accent-green);
+        }
+
+        .status-indicator.offline {
+            background-color: var(--accent-red);
+        }
+
+        .status-indicator.warning {
+            background-color: var(--accent-yellow);
+        }
+
+        .status-text {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Measurements */
+        .measurement-item {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .measurement-item:last-child {
+            border-bottom: none;
+        }
+
+        .measurement-label {
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .measurement-value {
+            font-weight: 600;
+            color: var(--accent-green);
+            text-align: right;
+        }
+
+        /* Log Viewer */
+        .btn-group {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-group button {
+            padding: 0.5rem 1rem;
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .btn-group button:hover {
+            border-color: var(--accent-green);
+            color: var(--accent-green);
+        }
+
+        .btn-group button.active {
+            background-color: var(--accent-green);
+            border-color: var(--accent-green);
+            color: white;
+        }
+
+        .log-viewer {
+            background-color: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 1rem;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 300px;
+            overflow-y: auto;
+            color: var(--text-muted);
+        }
+
+        .log-entry {
+            margin-bottom: 0.5rem;
+            display: flex;
+            gap: 0.75rem;
+            align-items: flex-start;
+            padding: 0.25rem 0;
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            flex-shrink: 0;
+            min-width: 120px;
+        }
+
+        .log-level {
+            flex-shrink: 0;
+            min-width: 50px;
+            padding: 0.2rem 0.5rem;
+            border-radius: 3px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .log-level.debug {
+            background-color: rgba(139, 148, 158, 0.2);
+            color: #8b949e;
+        }
+
+        .log-level.info {
+            background-color: rgba(63, 185, 80, 0.2);
+            color: var(--accent-green);
+        }
+
+        .log-level.warning {
+            background-color: rgba(210, 153, 34, 0.2);
+            color: var(--accent-yellow);
+        }
+
+        .log-level.error {
+            background-color: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+        }
+
+        .log-message {
+            flex: 1;
+            color: var(--text-secondary);
+        }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: var(--text-muted);
+        }
+
+        .empty-state i {
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .empty-state p {
+            margin: 0;
+            font-size: 0.95rem;
+        }
+
+        /* Modal Overlay */
+        .modal-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(2px);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background-color: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 2rem;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .modal-header-text {
+            font-size: 1.3rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-close {
+            background: none;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: color 0.3s ease;
+            padding: 0;
+        }
+
+        .modal-close:hover {
+            color: var(--accent-red);
+        }
+
+        /* Admin Modal Tabs */
+        .admin-tabs {
+            display: flex;
+            border-bottom: 2px solid var(--border-color);
+            margin-bottom: 1.5rem;
+            gap: 0.5rem;
+        }
+
+        .tab-button {
+            padding: 0.75rem 1.5rem;
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.95rem;
+            border-bottom: 3px solid transparent;
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+
+        .tab-button:hover {
+            color: var(--text-primary);
+        }
+
+        .tab-button.active {
+            color: var(--accent-green);
+            border-bottom-color: var(--accent-green);
+        }
+
+        .admin-tab-content {
+            display: none;
+        }
+
+        .admin-tab-content.active {
+            display: block;
+            animation: fadeIn 0.2s;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        /* Footer */
+        .footer {
+            text-align: center;
+            padding: 0.5rem 1rem;
+            color: var(--text-muted);
+            border-top: 1px solid var(--border-color);
+            font-size: 0.8rem;
+            background-color: var(--bg-secondary);
+        }
+
+        .footer p {
+            margin: 0;
+            line-height: 1.2;
+        }
+
+        .footer a {
+            color: var(--accent-green);
+            text-decoration: none;
+        }
+
+        .footer a:hover {
+            text-decoration: underline;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-secondary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-green);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .navbar {
+                flex-direction: column;
+                gap: 1rem;
+            }
+
+            .widgets-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .modal-content {
+                width: 95%;
+            }
+        }
+
+        /* Indicator circles for Ampel-style display */
+        .indicator-circle {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            margin-left: 8px;
+            vertical-align: middle;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .indicator-circle.level-1 { background-color: #27ae60; }  /* Green */
+        .indicator-circle.level-2 { background-color: #f39c12; }  /* Yellow */
+        .indicator-circle.level-3 { background-color: #e67e22; }  /* Orange */
+        .indicator-circle.level-4 { background-color: #e74c3c; }  /* Red */
+
+        /* Circle rating styles */
+        .circle-rating {
+            display: inline-flex;
+            gap: 4px;
+            align-items: center;
+            margin-left: 8px;
+        }
+
+        .circle-rating .circle {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            border: 1px solid rgba(0,0,0,0.2);
+        }
+
+        .circle-rating .circle.filled {
+            background-color: #27ae60;  /* Green for filled */
+        }
+
+        .circle-rating .circle.empty {
+            background-color: #e0e0e0;  /* Light gray for empty */
+        }
+
+        /* Indicator-specific colors */
+        .circle-rating.indicator-level-1 .circle.filled { background-color: #27ae60; }
+        .circle-rating.indicator-level-2 .circle.filled { background-color: #f39c12; }
+        .circle-rating.indicator-level-3 .circle.filled { background-color: #e67e22; }
+        .circle-rating.indicator-level-4 .circle.filled { background-color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar">
+        <div class="navbar-brand">
+            <i class="bi bi-cloud-wind"></i>
+            FreeAir2Lox-Bridge
+        </div>
+        <div class="navbar-right" style="display: flex; align-items: center; gap: 1.5rem;">
+            <a href="https://ko-fi.com/ogglobi" target="_blank" style="flex-shrink: 0;">
+                <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-☕-orange?style=flat-square" alt="Ko-fi" style="height: 24px;">
+            </a>
+            <div style="width: 1px; height: 24px; background-color: var(--border-color);"></div>
+            <button
+                class="btn-header-action"
+                title="Admin-Einstellungen"
+                onclick="showAdminControlModal()"
+                style="background: none; border: none; color: var(--accent-green); cursor: pointer; font-size: 1.2rem; display: flex; align-items: center; gap: 0.5rem; padding: 0.4rem 0.8rem; border-radius: 4px; transition: background-color 0.2s;"
+            >
+                <i class="bi bi-gear"></i>
+                <span style="font-size: 0.9rem;">Admin</span>
+            </button>
+            <div style="width: 1px; height: 24px; background-color: var(--border-color);"></div>
+            <div id="update-status-indicator" style="font-size: 0.85rem; white-space: nowrap; cursor: pointer;" data-tooltip="vor 0 Sekunden aktualisiert">
+                <span id="update-status-icon">🟢</span>
+            </div>
+            <div style="width: 1px; height: 24px; background-color: var(--border-color);"></div>
+            <div class="current-time" id="current-time">00:00:00</div>
+        </div>
+    </nav>
+
+    <!-- Main Container -->
+    <div class="container-main">
+        <!-- Alert Container -->
+        <div id="alert-container"></div>
+
+        <!-- Page Title -->
+        <div class="page-title">Dashboard</div>
+
+        <!-- Status Widgets -->
+        <div class="section-title">Status</div>
+        <div class="widgets-grid">
+            <div class="widget online" onclick="openDeviceListModal()" style="cursor: pointer;">
+                <div class="widget-header">
+                    <div class="widget-location">Overall</div>
+                    <div class="widget-icon"><i class="bi bi-diagram-3"></i></div>
+                </div>
+                <div class="widget-title">Geräte</div>
+                <div class="widget-subtitle">Konfiguriert</div>
+                <div class="widget-value"><span id="devices-total">0</span></div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick zum Verwalten</div>
+            </div>
+
+            <div class="widget online">
+                <div class="widget-header">
+                    <div class="widget-location">Overall</div>
+                    <div class="widget-icon"><i class="bi bi-lightning-charge"></i></div>
+                </div>
+                <div class="widget-title">Aktive Geräte</div>
+                <div class="widget-subtitle">Online</div>
+                <div class="widget-value"><span id="devices-enabled">0</span></div>
+            </div>
+
+            <div class="widget online" id="loxone-widget" onclick="showLoxoneEditModal()" style="cursor: pointer;">
+                <div class="widget-header">
+                    <div class="widget-location">Loxone</div>
+                    <button class="btn-icon" onclick="event.stopPropagation()" title="Loxone Miniserver bearbeiten" style="background: none; border: none; color: var(--accent-green); cursor: pointer; font-size: 1.1rem; z-index: 10; position: relative;">
+                        <i class="bi bi-pencil"></i>
+                    </button>
+                </div>
+                <div class="widget-title">Miniserver</div>
+                <div class="widget-subtitle">Status</div>
+                <div class="widget-value" id="loxone-status-text">✓</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick zum Bearbeiten</div>
+            </div>
+        </div>
+
+        <!-- Main Content Grid -->
+        <div class="section-title">Geräte-Übersicht</div>
+
+        <!-- Unknown Devices Alert -->
+        <div id="unknown-devices-alert" style="display: none; margin-bottom: 1.5rem; background-color: rgba(245, 200, 66, 0.1); border: 1px solid var(--accent-yellow); border-radius: 8px; padding: 1rem;">
+            <div style="display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1rem; color: var(--accent-yellow); font-weight: 600;">
+                <i class="bi bi-exclamation-circle-fill"></i>
+                <span>Neue FreeAir Geräte gefunden</span>
+            </div>
+            <div id="unknown-devices-list" style="display: flex; flex-direction: column; gap: 0.75rem;"></div>
+        </div>
+
+        <div id="devices-dashboard-grid" class="devices-dashboard-grid">
+            <div class="empty-state">
+                <i class="bi bi-inbox"></i>
+                <p>Keine Geräte konfiguriert</p>
+            </div>
+        </div>
+
+        <!-- Logs Card -->
+        <div class="card-panel">
+            <div class="card-panel-header">
+                <div class="card-panel-title">
+                    <i class="card-panel-icon bi bi-terminal"></i>
+                    System Logs
+                </div>
+                <button class="btn-icon" onclick="clearLogs()" title="Logs löschen">
+                    <i class="bi bi-trash"></i>
+                </button>
+            </div>
+            <div class="card-panel-body">
+                <div class="btn-group" style="margin-bottom: 1rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="logLevel" value="all"> Alle
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="logLevel" value="error"> Fehler
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="logLevel" value="warning"> Warnung
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="logLevel" value="info"> Info
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
+                        <input type="radio" name="logLevel" value="debug"> Debug
+                    </label>
+                </div>
+                <div class="log-viewer" id="log-viewer">
+                    <div style="color: var(--text-muted); text-align: center; padding: 1rem;">Wählen Sie ein Log-Level um die Logs anzuzeigen</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <p>Made with ❤️ by <a href="https://github.com/ogglobi" target="_blank">ogglobi</a></p>
+    </div>
+
+    <!-- Command Feedback Modal -->
+    <div class="modal-overlay" id="commandModal" style="display: none;">
+        <div class="modal-content">
+            <!-- Content will be filled by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Add Device Modal -->
+    <div class="modal-overlay" id="addDeviceModal">
+        <div class="modal-content">
+            <form onsubmit="event.preventDefault(); addDevice();">
+                <div class="modal-header-text">
+                    Neues Gerät hinzufügen
+                    <button class="modal-close" onclick="closeAddDeviceModal()" type="button">×</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Geräte-ID</label>
+                    <input type="text" id="device-id" placeholder="z.B. freeair01">
+                </div>
+                <div class="form-group">
+                    <label>Geräte-Name</label>
+                    <input type="text" id="device-name" placeholder="z.B. Wohnzimmer" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Seriennummer</label>
+                    <input type="text" id="device-serial" placeholder="z.B. FA100XXXX" autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label>Passwort</label>
+                    <input type="password" id="device-password" placeholder="FreeAir Passwort" autocomplete="current-password">
+                </div>
+
+                <div class="form-group" style="display: flex; gap: 0.75rem;">
+                    <button class="btn-secondary" onclick="closeAddDeviceModal()" type="button" style="flex: 1;">Abbrechen</button>
+                    <button class="btn-primary" type="submit" style="flex: 1;">Hinzufügen</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Bridge Control Modal -->
+    <div class="modal-overlay" id="controlModal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header-text">
+                <span id="control-modal-title">FreeAir Steuerung</span>
+                <button class="modal-close" onclick="closeControlModal()">×</button>
+            </div>
+
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 1.5rem; padding: 1.5rem 0;">
+                <!-- Comfort Level -->
+                <div>
+                    <label style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; display: block;">Komfortstufe</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn-control" onclick="setComfortLevel(1)" id="control-comfort-1" title="Stufe 1">1</button>
+                        <button class="btn-control" onclick="setComfortLevel(2)" id="control-comfort-2" title="Stufe 2">2</button>
+                        <button class="btn-control" onclick="setComfortLevel(3)" id="control-comfort-3" title="Stufe 3">3</button>
+                        <button class="btn-control" onclick="setComfortLevel(4)" id="control-comfort-4" title="Stufe 4">4</button>
+                        <button class="btn-control" onclick="setComfortLevel(5)" id="control-comfort-5" title="Stufe 5">5</button>
+                    </div>
+                    <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">Stellen Sie die gewünschte Komfortstufe ein (1-5)</small>
+                </div>
+
+                <!-- Operating Mode -->
+                <div>
+                    <label style="font-weight: 600; color: var(--text-primary); margin-bottom: 0.5rem; display: block;">Betriebsmodus</label>
+                    <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                        <button class="btn-control" onclick="setOperatingMode(1)" id="control-mode-1" title="Comfort Mode">Comfort</button>
+                        <button class="btn-control" onclick="setOperatingMode(2)" id="control-mode-2" title="Sleep Mode">Sleep</button>
+                        <button class="btn-control" onclick="setOperatingMode(3)" id="control-mode-3" title="Turbo Mode">Turbo</button>
+                        <button class="btn-control" onclick="setOperatingMode(4)" id="control-mode-4" title="Turbo Cool Mode">Cool</button>
+                    </div>
+                    <small style="color: var(--text-muted); display: block; margin-top: 0.5rem;">Wählen Sie den Betriebsmodus des Geräts</small>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="closeControlModal()" style="flex: 1;">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device List Modal -->
+    <div class="modal-overlay" id="deviceListModal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header-text">
+                Geräte verwalten
+                <button class="modal-close" onclick="closeDeviceListModal()">×</button>
+            </div>
+
+            <div id="device-list-content" style="max-height: 60vh; overflow-y: auto;">
+                <div style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                    <i class="bi bi-hourglass-split" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>
+                    Geräte werden geladen...
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button class="btn-primary" onclick="showAddDeviceModal()" style="flex: 1;">
+                    <i class="bi bi-plus-lg"></i> Neues Gerät hinzufügen
+                </button>
+                <button class="btn-secondary" onclick="closeDeviceListModal()" style="flex: 1;">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Settings Modal (Loxone Fields) -->
+    <div class="modal-overlay" id="deviceSettingsModal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header-text">
+                <span id="settings-modal-title">Loxone-Felder</span>
+                <button class="modal-close" onclick="closeDeviceSettingsModal()">×</button>
+            </div>
+
+            <!-- Select All/Deselect Buttons -->
+            <div style="display: flex; gap: 0.75rem; margin-bottom: 1rem; padding: 0 0 1rem 0; border-bottom: 1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="selectAllLoxoneFields()" style="flex: 1; font-size: 0.9rem;">
+                    <i class="bi bi-check-square"></i> Alle auswählen
+                </button>
+                <button class="btn-secondary" onclick="deselectAllLoxoneFields()" style="flex: 1; font-size: 0.9rem;">
+                    <i class="bi bi-square"></i> Alle abwählen
+                </button>
+            </div>
+
+            <div id="device-settings-content" style="max-height: 60vh; overflow-y: auto;">
+                <div style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                    <i class="bi bi-hourglass-split" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>
+                    Geräteeinstellungen werden geladen...
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="downloadLoxoneXml()" style="flex: 1;" title="Sensor-XML herunterladen">
+                    <i class="bi bi-download"></i> Sensoren
+                </button>
+                <button class="btn-secondary" onclick="downloadLoxoneVirtualOut()" style="flex: 1;" title="Virtual Outputs XML herunterladen">
+                    <i class="bi bi-download"></i> Befehle
+                </button>
+                <button class="btn-secondary" onclick="closeDeviceSettingsModal()" style="flex: 1;">Abbrechen</button>
+                <button class="btn-primary" onclick="saveLoxoneFieldsFromModal()" style="flex: 1;">
+                    <i class="bi bi-floppy"></i> Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Device Edit Modal (FreeAir Configuration) -->
+    <div class="modal-overlay" id="deviceEditModal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header-text">
+                <span id="edit-modal-title">Gerät bearbeiten</span>
+                <button class="modal-close" onclick="closeDeviceEditModal()">×</button>
+            </div>
+
+            <div id="device-edit-content" style="max-height: 60vh; overflow-y: auto;">
+                <div style="text-align: center; color: var(--text-muted); padding: 2rem;">
+                    <i class="bi bi-hourglass-split" style="font-size: 2rem; display: block; margin-bottom: 0.5rem;"></i>
+                    Geräteinformationen werden geladen...
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="closeDeviceEditModal()" style="flex: 1;">Abbrechen</button>
+                <button class="btn-primary" onclick="saveDeviceEditModal()" style="flex: 1;">
+                    <i class="bi bi-floppy"></i> Speichern
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loxone Config Modal -->
+    <div class="modal-overlay" id="loxoneConfigModal">
+        <div class="modal-content">
+            <div class="modal-header-text">
+                Loxone Miniserver konfigurieren
+                <button class="modal-close" onclick="closeLoxoneEditModal()">×</button>
+            </div>
+
+            <div class="form-group">
+                <label>IP-Adresse</label>
+                <input type="text" id="loxone-ip-modal" placeholder="192.168.1.50">
+            </div>
+            <div class="form-group">
+                <label>UDP Port</label>
+                <input type="number" id="loxone-port-modal" placeholder="5555">
+            </div>
+
+            <div class="form-group" style="display: flex; gap: 0.75rem;">
+                <button class="btn-secondary" onclick="closeLoxoneEditModal()" style="flex: 1;">Abbrechen</button>
+                <button class="btn-primary" onclick="saveLoxoneConfigModal()" style="flex: 1;">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Admin Control Modal -->
+    <div class="modal-overlay" id="adminControlModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header-text">
+                Admin-Einstellungen
+                <button class="modal-close" onclick="closeAdminControlModal()">×</button>
+            </div>
+
+            <!-- TAB BUTTONS -->
+            <div class="admin-tabs">
+                <button class="tab-button active" onclick="switchAdminTab('password')">
+                    🔑 Passwort
+                </button>
+                <button class="tab-button" onclick="switchAdminTab('backup')">
+                    💾 Backup
+                </button>
+            </div>
+
+            <!-- TAB 1: PASSWORD -->
+            <div id="admin-tab-password" class="admin-tab-content active">
+                <h5 style="color: var(--accent-green); margin-bottom: 1rem;">🔐 Passwort ändern</h5>
+
+                <div id="admin-control-alert" class="alert" style="display: none; margin-bottom: 1rem;"></div>
+
+                <div class="form-group">
+                    <label for="admin-old-password">Aktuelles Passwort</label>
+                    <input type="password" id="admin-old-password" class="form-control" placeholder="Geben Sie Ihr aktuelles Passwort ein" autocomplete="current-password">
+                </div>
+
+                <div class="form-group">
+                    <label for="admin-new-password">Neues Passwort</label>
+                    <input type="password" id="admin-new-password" class="form-control" placeholder="Neues Passwort (mind. 4 Zeichen)" autocomplete="off" minlength="4">
+                </div>
+
+                <div class="form-group">
+                    <label for="admin-confirm-password">Passwort wiederholen</label>
+                    <input type="password" id="admin-confirm-password" class="form-control" placeholder="Neues Passwort erneut eingeben" autocomplete="off" minlength="4">
+                </div>
+
+                <div class="form-group" style="display: flex; gap: 0.75rem;">
+                    <button class="btn-secondary" onclick="closeAdminControlModal()" style="flex: 1;">Abbrechen</button>
+                    <button class="btn-primary" onclick="changeAdminPassword()" style="flex: 1;">Passwort ändern</button>
+                </div>
+
+                <hr style="border-color: var(--border-color); margin: 1.5rem 0;">
+
+                <h5 style="color: var(--accent-red); margin-bottom: 1rem;">🚪 Sitzung</h5>
+                <button class="btn-secondary" onclick="logoutAdmin()" style="width: 100%;">Abmelden</button>
+            </div>
+
+            <!-- TAB 2: BACKUP -->
+            <div id="admin-tab-backup" class="admin-tab-content">
+                <h5 style="color: var(--accent-green); margin-bottom: 1rem;">💾 Backup & Restore</h5>
+
+                <div style="margin-bottom: 1.5rem;">
+                    <h6 style="margin-bottom: 0.75rem;">📥 Backup (Konfiguration Herunterladen)</h6>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Speichert aktuelle Konfiguration als JSON-Datei</p>
+                    <button class="btn-primary" onclick="downloadBackup()" style="width: 100%;">
+                        🔽 Config Download
+                    </button>
+                </div>
+
+                <hr style="border-color: var(--border-color); margin: 1.5rem 0;">
+
+                <div>
+                    <h6 style="margin-bottom: 0.75rem;">📤 Restore (Konfiguration Wiederherstellen)</h6>
+                    <p style="color: var(--text-muted); font-size: 0.9rem; margin-bottom: 1rem;">Lädt gesicherte Konfiguration hoch</p>
+                    <button class="btn-secondary" onclick="selectRestoreFile()" style="width: 100%; margin-bottom: 1rem;">
+                        📁 Config File auswählen...
+                    </button>
+
+                    <div style="padding: 1rem; background: rgba(255, 193, 7, 0.1); border-left: 4px solid #ffc107; border-radius: 4px; margin-bottom: 1rem;">
+                        <strong style="color: #ffc107;">⚠️ Überschreibt die aktuelle Konfiguration!</strong>
+                    </div>
+
+                    <button class="btn-secondary" onclick="closeAdminControlModal()" style="width: 100%;">
+                        Schließen
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/app.js?v=3"></script>
+    <script>
+        // Note: showAddDeviceModal and closeAddDeviceModal are defined in app.js
+
+        window.onclick = function(event) {
+            const modal = document.getElementById('addDeviceModal');
+            if (event.target === modal) {
+                closeAddDeviceModal();
+            }
+        }
+
+        function filterLogs(level) {
+            document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
+            event.target.classList.add('active');
+        }
+
+        function clearLogs() {
+            if (confirm('Logs wirklich löschen?')) {
+                document.getElementById('log-viewer').innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 1rem;">Logs gelöscht</div>';
+            }
+        }
+
+        // Update time
+        setInterval(() => {
+            const now = new Date();
+            document.getElementById('current-time').textContent = now.toLocaleString('de-DE', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+        }, 1000);
+
+        // Update initial time
+        document.getElementById('current-time').textContent = new Date().toLocaleString('de-DE', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    </script>
+</body>
+</html>

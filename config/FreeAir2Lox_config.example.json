@@ -1,0 +1,32 @@
+{
+  "devices": [
+    {
+      "id": "freeair-wohnzimmer",
+      "name": "Wohnzimmer",
+      "serial_no": "FA100001",
+      "password": "geheim123",
+      "enabled": true
+    },
+    {
+      "id": "freeair-schlafzimmer",
+      "name": "Schlafzimmer",
+      "serial_no": "FA100002",
+      "password": "geheim456",
+      "enabled": true
+    },
+    {
+      "id": "freeair-büro",
+      "name": "Büro",
+      "serial_no": "FA100003",
+      "password": "geheim789",
+      "enabled": false
+    }
+  ],
+  "loxone": {
+    "ip": "192.168.1.50",
+    "port": 5555,
+    "enabled": true
+  },
+  "http_port": 80,
+  "udp_port": 5555
+}

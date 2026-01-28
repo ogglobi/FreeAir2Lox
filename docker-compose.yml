@@ -1,0 +1,36 @@
+services:
+  freeair2lox:
+    build:
+      context: .
+      dockerfile: Dockerfile.app
+    image: freeair2lox-bridge:latest
+    container_name: freeair2lox
+    hostname: freeair2lox
+    ports:
+      - "8080:80"
+      - "80:80"
+      - "5555:5555/udp"
+    volumes:
+      - ./config:/app/config
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - PUID=99
+      - PGID=100
+      - UMASK=000
+      - TZ=UTC
+      - LOG_LEVEL=INFO
+      - CONFIG_FILE=/app/config/FreeAir2Lox_config.json
+      - APPDATA_PATH=/mnt/user/appdata/freeair2lox
+    restart: unless-stopped
+    networks:
+      - freeair-network
+    healthcheck:
+      test: ["CMD", "python3", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 80))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 5s
+
+networks:
+  freeair-network:
+    driver: bridge

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Container version="2">
+  <!-- Container Metadata -->
+  <Name>freeair2lox</Name>
+  <Repository>ogglobi/freeair2lox</Repository>
+  <Registry>https://hub.docker.com/</Registry>
+  <Project>https://github.com/ogglobi/FreeAir2Lox</Project>
+  <Support>https://github.com/ogglobi/FreeAir2Lox/issues</Support>
+  <Overview>
+    FreeAir2Lox Bridge: Connect FreeAir 100 ventilation devices to Loxone Smart Home.
+    Provides HTTP API, WebUI for configuration, and UDP integration with Loxone Miniserver.
+  </Overview>
+  <Category>HomeAutomation</Category>
+  <WebUI>http://[IP]:[PORT:8080]</WebUI>
+  <TemplateURL>https://raw.githubusercontent.com/ogglobi/FreeAir2Lox/main/freeair2lox.xml</TemplateURL>
+  <Icon>https://raw.githubusercontent.com/ogglobi/FreeAir2Lox/main/static/favicon.svg</Icon>
+  <Date>2026-01-28</Date>
+  <Requires>Docker</Requires>
+  <Changes>
+    ### v1.2.0 (2026-01-28)
+    - Consolidated setup wizard (removed separate /setup page)
+    - Unraid appdata initialization (runtime config copy)
+    - Config naming standardization (FreeAir2Lox_config.*)
+    - Code cleanup and optimization
+    - Template cleanup
+
+    ### v1.1.0
+    - Config Backup/Restore
+    - Auto-discovery
+    - Command Lock System
+
+    ### v1.0.0
+    - Initial release
+    - Multi-device support
+    - Loxone XML generation
+  </Changes>
+
+  <!-- Network Configuration -->
+  <Network>
+    <Mode>bridge</Mode>
+  </Network>
+
+  <!-- Privileged Mode -->
+  <Privileged>false</Privileged>
+
+  <!-- Environment Variables -->
+  <Environment>
+    <!-- === UNRAID SYSTEM VARIABLES === -->
+    <Variable Name="PUID" Value="99" Description="Process User ID (99=nobody for services). Find your value with: id username">
+      <Value>99</Value>
+    </Variable>
+    <Variable Name="PGID" Value="100" Description="Process Group ID (100=users). Find your value with: id username">
+      <Value>100</Value>
+    </Variable>
+    <Variable Name="UMASK" Value="000" Description="File creation mask (000=rw-rw-rw-, 022=rw-r--r--)">
+      <Value>000</Value>
+    </Variable>
+    <Variable Name="TZ" Value="UTC" Description="Timezone for logs and timestamps (e.g., Europe/Berlin, Europe/Vienna)">
+      <Value>UTC</Value>
+    </Variable>
+    <Variable Name="LOG_LEVEL" Value="INFO" Description="Logging level: DEBUG, INFO, WARNING, ERROR">
+      <Value>INFO</Value>
+    </Variable>
+
+    <!-- === INTERNAL CONFIGURATION === -->
+    <!-- Note: FreeAir device and Loxone settings are configured via the Web UI First-Start Wizard -->
+    <Variable Name="CONFIG_FILE" Value="/app/config/FreeAir2Lox_config.json" Description="Configuration file path (do not change)">
+      <Value>/app/config/FreeAir2Lox_config.json</Value>
+    </Variable>
+  </Environment>
+
+  <!-- Data Paths (for Unraid UI) -->
+  <Config Name="APPDATA" Target="/app/config" Default="" Mode="rw" Description="Configuration and data storage directory" Type="Path" Display="always" Required="false" Mask="false">/mnt/user/appdata/freeair2lox</Config>
+
+  <!-- Port Mappings -->
+  <Ports>
+    <!-- WebUI -->
+    <Port Name="Web UI" Protocol="tcp" HostPort="8080" ContainerPort="80" Access="external" Description="Web Administration Interface"/>
+
+    <!-- FreeAir HTTP (can conflict with other services on port 80)
+         Alternative: use 8888 if port 80 is already in use
+    -->
+    <Port Name="FreeAir HTTP" Protocol="tcp" HostPort="80" ContainerPort="80" Access="internal" Description="FreeAir device communication (can be changed to 8888)"/>
+
+    <!-- Loxone UDP -->
+    <Port Name="Loxone UDP" Protocol="udp" HostPort="5555" ContainerPort="5555" Access="internal" Description="Loxone Miniserver communication"/>
+  </Ports>
+
+  <!-- Volume Mounts -->
+  <Volumes>
+    <!-- Configuration storage in Unraid appdata -->
+    <Volume Name="appdata" HostDir="/mnt/user/appdata/freeair2lox" ContainerDir="/app/config" Access="rw" Description="Configuration and data storage"/>
+
+    <!-- Docker socket (for potential future Docker integration) -->
+    <Volume Name="docker-sock" HostDir="/var/run/docker.sock" ContainerDir="/var/run/docker.sock" Access="ro" Description="Docker socket"/>
+  </Volumes>
+
+  <!-- Restart Policy -->
+  <RestartPolicy>unless-stopped</RestartPolicy>
+
+  <!-- Logging -->
+  <Logging>
+    <Format>json-file</Format>
+    <MaxFile>10</MaxFile>
+    <MaxSize>10m</MaxSize>
+  </Logging>
+
+  <!-- Healthcheck -->
+  <Healthcheck>
+    <Test>["CMD", "python3", "-c", "import socket; s=socket.socket(); s.connect(('localhost', 80)); s.close()"]</Test>
+    <Interval>30s</Interval>
+    <Timeout>10s</Timeout>
+    <Retries>3</Retries>
+    <StartPeriod>5s</StartPeriod>
+  </Healthcheck>
+
+  <Beta>false</Beta>
+  <MinVer>6.9</MinVer>
+</Container>
