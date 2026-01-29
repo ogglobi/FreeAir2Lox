@@ -17,14 +17,15 @@
   <Date>2026-01-28</Date>
   <Requires>Docker</Requires>
   <Changes>
-    ### v1.2.0 (2026-01-28)
+    ### v1.2.0 (2026-01-29)
     - Consolidated setup wizard (removed separate /setup page)
+    - First-Setup authentication flow fixed
+    - Empty example config (no dummy devices)
     - Unraid appdata initialization (runtime config copy)
     - Config naming standardization (FreeAir2Lox_config.*)
     - Code cleanup and optimization
-    - Template cleanup
 
-    ### v1.1.0
+    ### v1.1.0 (2026-01-28)
     - Config Backup/Restore
     - Auto-discovery
     - Command Lock System

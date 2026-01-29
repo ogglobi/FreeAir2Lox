@@ -284,6 +284,11 @@ def before_request():
         request.path.startswith('/apps/data/blucontrol/')):  # FreeAir device API
         return
 
+    # Check if first setup is still in progress - allow device and loxone API setup without auth
+    if config_mgr and config_mgr.is_first_setup():
+        if request.path in ['/api/devices', '/api/loxone'] or request.path == '/first-setup':
+            return
+
     # Check if password is set
     if config_mgr and not config_mgr.is_password_set():
         # Password not set - redirect to first-setup
@@ -896,10 +901,38 @@ def first_setup():
         logger.error(f"First setup template not found: {e}")
         return "First setup template not found", 404
 
-@app.route('/api/setup-check')
+@app.route('/api/setup-check', methods=['POST', 'GET'])
 def setup_check():
-    """Check if first setup is needed"""
+    """Check if first setup is needed, or set admin password"""
     global config_mgr
+
+    # POST: Set admin password during first setup
+    if request.method == 'POST':
+        try:
+            data = request.get_json()
+            password = data.get('password', '').strip()
+            confirm = data.get('confirm_password', '').strip()
+
+            if not password or not confirm:
+                return jsonify({'error': 'Alle Felder erforderlich'}), 400
+
+            if password != confirm:
+                return jsonify({'error': 'Passwörter stimmen nicht überein'}), 400
+
+            if len(password) < 4:
+                return jsonify({'error': 'Passwort muss mindestens 4 Zeichen lang sein'}), 400
+
+            # Set password
+            if config_mgr.set_admin_password(password):
+                logger.info("✅ Admin password set during setup")
+                return jsonify({'status': 'success'})
+            else:
+                return jsonify({'error': 'Fehler beim Speichern des Passworts'}), 500
+        except Exception as e:
+            logger.error(f"Error setting admin password: {e}")
+            return jsonify({'error': str(e)}), 500
+
+    # GET: Check if first setup is needed
     try:
         is_first_setup = config_mgr.is_first_setup()
         return jsonify({
@@ -1235,7 +1268,6 @@ def api_get_loxone_virtual_outputs(device_id):
             return jsonify({'error': 'Failed to generate VirtualOut XML'}), 400
 
         # Return as XML file download
-        from io import BytesIO
         xml_bytes = BytesIO(xml_content.encode('utf-8'))
         device_name = device.get('name', 'device')
         return send_file(

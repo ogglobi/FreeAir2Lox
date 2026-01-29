@@ -1,4 +1,4 @@
-# FreeAir2Lox-Bridge v1.1.0
+# FreeAir2Lox-Bridge v1.2.0
 
 **Eine produktionsreife Bridge zum Verbinden von FreeAir 100 Ventilationssystemen mit Loxone Smart Home Automation.**
 
@@ -81,7 +81,7 @@ cd FreeAir2Lox-Bridge
 docker-compose up -d
 
 # Logs überprüfen
-docker-compose logs -f freeair-bridge
+docker-compose logs -f freeair2lox
 
 # Web-Interface öffnen: http://localhost:8080
 ```
@@ -108,7 +108,7 @@ services:
 ### 🐍 Manuelle Installation (Python)
 ```bash
 pip install -r requirements.txt
-cp config/freeair_config.example.json config/FreeAir2Lox_config.json
+cp config/FreeAir2Lox_config.example.json config/FreeAir2Lox_config.json
 python web_admin.py
 # Web-Interface: http://localhost:80
 ```

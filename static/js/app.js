@@ -6,9 +6,8 @@ console.log('[APP] Script loaded');
 
 // Check if user is still logged in (called on page load)
 async function checkSession() {
-    // If we're on /login or /setup or /first-setup, don't check session
+    // If we're on /login or /first-setup, don't check session
     if (window.location.pathname === '/login' ||
-        window.location.pathname === '/setup' ||
         window.location.pathname === '/first-setup') {
         return;
     }
