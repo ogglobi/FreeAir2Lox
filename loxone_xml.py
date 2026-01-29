@@ -169,7 +169,7 @@ def get_bridge_ip(config_mgr=None) -> str:
         from flask import request
         host = request.host  # e.g., "192.168.10.122:80" or "192.168.10.122"
         ip = host.split(':')[0]  # Remove port if present
-        
+
         # Skip localhost/127.0.0.1 (Docker container context) and try next method
         if ip not in ('localhost', '127.0.0.1'):
             logger.info(f"Got Bridge IP from HTTP request: {ip}")

@@ -13,7 +13,7 @@ from collections import deque
 from datetime import datetime, timedelta
 from functools import wraps
 from io import BytesIO
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from flask import (
     Flask,
@@ -200,7 +200,7 @@ class LogFileRotation:
             LogFileRotation.ensure_dir()
             with open(LogFileRotation.get_current_file(), 'a', encoding='utf-8') as f:
                 f.write(f"[{log_entry['timestamp']}] {log_entry['level']:8} {log_entry['module']:15} {log_entry['message']}\n")
-        except Exception as e:
+        except Exception:
             pass  # Silently fail to not break logging chain
 
     @staticmethod
@@ -218,7 +218,7 @@ class LogFileRotation:
                             os.remove(os.path.join(LogFileRotation.LOG_DIR, filename))
                     except ValueError:
                         pass  # Skip files with unexpected names
-        except Exception as e:
+        except Exception:
             pass  # Silently fail
 
 
@@ -315,7 +315,7 @@ def init_app():
 # COMMAND LOCK FUNCTIONS
 # ============================================================================
 
-def set_command_lock(device_name: str, expected_comfort: int = None, expected_mode: int = None):
+def set_command_lock(device_name: str, expected_comfort: Optional[int] = None, expected_mode: Optional[int] = None):
     """
     Set a command lock for a device. While locked, UDP sends to Loxone are blocked.
     The lock is released when FreeAir confirms the expected values or timeout occurs.
@@ -436,7 +436,7 @@ def before_request():
 
     # Check if first setup is still in progress - allow device and loxone API setup without auth
     if config_mgr and config_mgr.is_first_setup():
-        if (request.path in ['/api/devices', '/api/loxone'] or 
+        if (request.path in ['/api/devices', '/api/loxone'] or
             request.path == '/first-setup' or
             request.path.startswith('/api/devices/') and request.path.endswith(('/loxone-xml', '/loxone-virtual-outputs'))):
             return
@@ -1359,9 +1359,7 @@ def api_get_loxone_xml(device_id):
             logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
-        # Get Loxone settings
-        loxone_config = config_mgr.config.get('loxone', {})
-        loxone_ip = loxone_config.get('ip', '192.168.1.50')
+        # Get bridge IP for XML
         bridge_ip = get_bridge_ip()
 
         # Generate XML
@@ -1407,9 +1405,7 @@ def api_get_loxone_virtual_outputs(device_id):
             logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
-        # Get Loxone settings
-        loxone_config = config_mgr.config.get('loxone', {})
-        loxone_ip = loxone_config.get('ip', '192.168.1.50')
+        # Get bridge IP for XML
         bridge_ip = get_bridge_ip()
 
         # Generate VirtualOut XML
