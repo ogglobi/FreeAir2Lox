@@ -2102,7 +2102,8 @@ async function downloadLoxoneXml() {
         const contentDisposition = response.headers.get('content-disposition');
         let filename = `FreeAir2Lox-Inputs.xml`;
         if (contentDisposition) {
-            const match = contentDisposition.match(/filename="([^"]+)"/);
+            // Match filename with or without quotes: filename="xxx" or filename=xxx
+            const match = contentDisposition.match(/filename="?([^"\s;]+)"?/);
             if (match) filename = match[1];
         }
 
@@ -2145,9 +2146,10 @@ async function downloadLoxoneVirtualOut() {
 
         // Get filename from Content-Disposition header or use default
         const contentDisposition = response.headers.get('content-disposition');
-        let filename = `FreeAir2Lox-Befehle.xml`;
+        let filename = `FreeAir2Lox-Outputs.xml`;
         if (contentDisposition) {
-            const match = contentDisposition.match(/filename="([^"]+)"/);
+            // Match filename with or without quotes: filename="xxx" or filename=xxx
+            const match = contentDisposition.match(/filename="?([^"\s;]+)"?/);
             if (match) filename = match[1];
         }
 
@@ -2479,4 +2481,284 @@ function showAdminAlert(message, type, alertDiv) {
             alertDiv.style.display = 'none';
         }, 3000);
     }
+}
+
+// ===== ADVANCED LOGS (v1.3.0) =====
+
+window.logState = {
+    allLogs: [],
+    filteredLogs: [],
+    selectedLevels: ['DEBUG', 'INFO', 'WARNING', 'ERROR'],
+    searchText: '',
+    timeRange: '24h',
+    isPaused: false,
+    eventSource: null,
+    updateInterval: null
+};
+
+function openAdvancedLogs() {
+    const container = document.getElementById('advanced-logs-container');
+    container.classList.add('visible');
+
+    // Set 24h as active time range button
+    document.querySelectorAll('.time-range-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.getAttribute('data-range') === '24h') {
+            btn.classList.add('active');
+        }
+    });
+
+    updateLogsFromAPI();
+    updateLogStats();
+    initLogStreaming();
+
+    // Update stats every 5 seconds
+    if (window.logState.updateInterval) clearInterval(window.logState.updateInterval);
+    window.logState.updateInterval = setInterval(() => {
+        if (!window.logState.isPaused) {
+            updateLogStats();
+        }
+    }, 5000);
+}
+
+function closeAdvancedLogs() {
+    const container = document.getElementById('advanced-logs-container');
+    container.classList.remove('visible');
+    if (window.logState.eventSource) {
+        window.logState.eventSource.close();
+    }
+    if (window.logState.updateInterval) {
+        clearInterval(window.logState.updateInterval);
+    }
+}
+
+function updateLogsFromAPI() {
+    const levels = document.querySelectorAll('input[id^="filter-"]:checked');
+    const selectedLevels = Array.from(levels).map(el => {
+        const id = el.id;
+        return id.replace('filter-', '').toUpperCase();
+    });
+
+    const search = document.getElementById('search-logs-input')?.value || '';
+    const params = new URLSearchParams({
+        level: selectedLevels.join(','),
+        search: search,
+        limit: 500,
+        time_range: window.logState.timeRange
+    });
+
+    fetch(`/api/logs?${params}`, {
+        credentials: 'include'
+    })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                window.logState.allLogs = data.logs;
+                filterLogs();
+            }
+        })
+        .catch(e => console.error('Error fetching logs:', e));
+}
+
+function filterLogs() {
+    const levels = [];
+    document.querySelectorAll('input[id^="filter-"]:checked').forEach(el => {
+        levels.push(el.id.replace('filter-', '').toUpperCase());
+    });
+
+    const search = document.getElementById('search-logs-input')?.value.toLowerCase() || '';
+
+    window.logState.filteredLogs = window.logState.allLogs.filter(log => {
+        let match = true;
+
+        if (levels.length > 0 && !levels.includes(log.level)) match = false;
+        if (search && !log.message.toLowerCase().includes(search) && !log.module.toLowerCase().includes(search)) match = false;
+
+        return match;
+    });
+
+    renderLogs();
+}
+
+let filterTimeout;
+function debouncedFilterLogs() {
+    clearTimeout(filterTimeout);
+    filterTimeout = setTimeout(filterLogs, 300);
+}
+
+function setTimeRange(range) {
+    window.logState.timeRange = range;
+    document.querySelectorAll('.time-range-btn').forEach(btn => {
+        // Mark button as active if its data-range matches the selected range
+        if (btn.getAttribute('data-range') === range) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    updateLogsFromAPI();
+}
+
+function togglePauseLogs() {
+    window.logState.isPaused = !window.logState.isPaused;
+    const btn = document.getElementById('pause-btn-logs');
+    const indicator = document.getElementById('live-indicator');
+    const text = document.getElementById('live-text');
+
+    if (window.logState.isPaused) {
+        btn.textContent = '▶ Resume';
+        indicator.style.background = '#ffaa00';
+        text.textContent = '⏸ PAUSED';
+    } else {
+        btn.textContent = '⏸ Pause';
+        indicator.style.background = '#00ff41';
+        text.textContent = '● LIVE';
+    }
+}
+
+function initLogStreaming() {
+    if (window.logState.eventSource) {
+        window.logState.eventSource.close();
+    }
+
+    // EventSource automatisch mit credentials (nur wenn same-origin)
+    window.logState.eventSource = new EventSource('/api/logs/stream');
+
+    window.logState.eventSource.onmessage = (event) => {
+        if (window.logState.isPaused) return;
+
+        try {
+            const newLog = JSON.parse(event.data);
+            window.logState.allLogs.unshift(newLog);
+
+            if (window.logState.allLogs.length > 500) {
+                window.logState.allLogs.pop();
+            }
+
+            filterLogs();
+        } catch (e) {
+            console.error('Error parsing log:', e);
+        }
+    };
+
+    window.logState.eventSource.onerror = (error) => {
+        console.error('Log streaming error:', error);
+        // Versuche neu zu verbinden nach 3 Sekunden
+        if (window.logState.eventSource) {
+            window.logState.eventSource.close();
+        }
+        setTimeout(() => {
+            if (!window.logState.isPaused && document.getElementById('advanced-logs-container').style.display !== 'none') {
+                console.log('Reconnecting SSE...');
+                initLogStreaming();
+            }
+        }, 3000);
+    };
+}
+
+function renderLogs() {
+    const container = document.getElementById('log-entries-container');
+    if (!container) return;
+
+    if (window.logState.filteredLogs.length === 0) {
+        container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">Keine Logs gefunden</div>';
+        return;
+    }
+
+    container.innerHTML = window.logState.filteredLogs
+        .map(log => `
+            <div class="log-entry">
+                <div class="log-time">${log.timestamp.substring(11, 19)}</div>
+                <div class="log-level ${log.level}">${log.level}</div>
+                <div class="log-message">${escapeHtml(log.message)}</div>
+            </div>
+        `)
+        .join('');
+
+    container.scrollTop = container.scrollHeight;
+}
+
+function updateLogStats() {
+    fetch('/api/logs/stats', {
+        credentials: 'include'
+    })
+        .then(r => r.json())
+        .then(stats => {
+            if (stats.error) {
+                console.error('Stats error:', stats.error);
+                return;
+            }
+            document.getElementById('stat-errors').textContent = stats.errors_24h || 0;
+            document.getElementById('stat-warnings').textContent = stats.warnings_24h || 0;
+            document.getElementById('stat-avg-response').textContent = (stats.avg_response_time_ms || 0).toFixed(1) + 'ms';
+            document.getElementById('stat-uptime').textContent = formatUptime(stats.uptime_seconds || 0);
+        })
+        .catch(e => console.error('Error fetching stats:', e));
+}
+
+function formatUptime(seconds) {
+    const days = Math.floor(seconds / 86400);
+    const hours = Math.floor((seconds % 86400) / 3600);
+    const mins = Math.floor((seconds % 3600) / 60);
+
+    if (days > 0) return `${days}d ${hours}h`;
+    if (hours > 0) return `${hours}h ${mins}m`;
+    return `${mins}m`;
+}
+
+function exportLogs() {
+    const format = prompt('Export format? (txt/csv/json)', 'txt');
+    if (!format) return;
+
+    const levels = Array.from(document.querySelectorAll('input[id^="filter-"]:checked'))
+        .map(el => el.id.replace('filter-', '').toUpperCase())
+        .join(',');
+
+    fetch('/api/logs/export', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+            level: levels,
+            time_range: window.logState.timeRange,
+            format: format
+        })
+    })
+    .then(r => r.blob())
+    .then(blob => {
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `freeair2lox-logs_${new Date().toISOString().split('T')[0]}.${format}`;
+        a.click();
+        window.URL.revokeObjectURL(url);
+    })
+    .catch(e => alert('Export fehlgeschlagen: ' + e));
+}
+
+function clearLogsAdvanced() {
+    if (confirm('Alle Logs wirklich löschen? (nur In-Memory Buffer)')) {
+        fetch('/api/logs/clear', {
+            method: 'POST',
+            credentials: 'include'
+        })
+            .then(() => {
+                window.logState.allLogs = [];
+                window.logState.filteredLogs = [];
+                renderLogs();
+                alert('Logs gelöscht');
+            })
+            .catch(e => alert('Löschen fehlgeschlagen: ' + e));
+    }
+}
+
+function escapeHtml(text) {
+    const map = {
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, m => map[m]);
 }

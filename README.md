@@ -1,4 +1,4 @@
-# FreeAir2Lox-Bridge v1.2.0
+# FreeAir2Lox-Bridge v1.3.0
 
 **Eine produktionsreife Bridge zum Verbinden von FreeAir 100 Ventilationssystemen mit Loxone Smart Home Automation.**
 

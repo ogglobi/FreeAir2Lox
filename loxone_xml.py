@@ -59,7 +59,7 @@ def generate_loxone_xml(
     device_name: str,
     selected_fields: List[str],
     port: int = 5555,
-    loxone_ip: str = "192.168.1.50",
+    bridge_ip: str = "192.168.10.122",
     device_data: Optional[Dict] = None
 ) -> Optional[str]:
     """
@@ -69,7 +69,7 @@ def generate_loxone_xml(
         device_name: Name of the device
         selected_fields: List of field keys to include
         port: Loxone Miniserver UDP port
-        loxone_ip: Loxone Miniserver IP address
+        bridge_ip: FreeAir2Lox Bridge IP address (source of UDP data)
         device_data: Optional device data for future extensions
 
     Returns:
@@ -77,7 +77,7 @@ def generate_loxone_xml(
     """
     try:
         xml_lines = ['<?xml version="1.0" encoding="utf-8"?>']
-        xml_lines.append(f'<VirtualInUdp Title="FreeAir2Lox-{device_name}" Address="{loxone_ip}" Port="{port}">')
+        xml_lines.append(f'<VirtualInUdp Title="FreeAir2Lox-{device_name}" Address="{bridge_ip}" Port="{port}">')
 
         for field_key in selected_fields:
             if field_key in LOXONE_FIELD_DEFINITIONS:
@@ -153,8 +153,8 @@ def get_bridge_ip(config_mgr=None) -> str:
     Get the Bridge IP address through multiple methods.
 
     Priority:
-    1. Environment variable BRIDGE_IP
-    2. host.docker.internal (Docker Desktop)
+    1. HTTP request context (request.host) - most reliable
+    2. Environment variable BRIDGE_IP
     3. Outbound socket detection
     4. Config file fallback
 
@@ -164,19 +164,26 @@ def get_bridge_ip(config_mgr=None) -> str:
     Returns:
         Bridge IP address string
     """
-    # Method 1: Environment variable
+    # Method 1: From HTTP request context (most reliable)
+    try:
+        from flask import request
+        host = request.host  # e.g., "192.168.10.122:80" or "192.168.10.122"
+        ip = host.split(':')[0]  # Remove port if present
+        
+        # Skip localhost/127.0.0.1 (Docker container context) and try next method
+        if ip not in ('localhost', '127.0.0.1'):
+            logger.info(f"Got Bridge IP from HTTP request: {ip}")
+            return ip
+        else:
+            logger.debug("HTTP request returned localhost/127.0.0.1, trying next method")
+    except Exception as e:
+        logger.debug(f"HTTP request method failed: {e}")
+
+    # Method 2: Environment variable
     env_bridge_ip = os.getenv('BRIDGE_IP')
     if env_bridge_ip:
         logger.info(f"Got Bridge IP from environment variable: {env_bridge_ip}")
         return env_bridge_ip
-
-    # Method 2: Docker host.docker.internal
-    try:
-        bridge_ip = socket.gethostbyname("host.docker.internal")
-        logger.info(f"Got Bridge IP from host.docker.internal: {bridge_ip}")
-        return bridge_ip
-    except Exception as e:
-        logger.debug(f"host.docker.internal resolution failed: {e}")
 
     # Method 3: Socket detection
     try:
@@ -189,7 +196,7 @@ def get_bridge_ip(config_mgr=None) -> str:
     except Exception as e:
         logger.debug(f"Socket method failed: {e}")
 
-    # Method 4: Default fallback (Bridge IP detection failed)
-    fallback_ip = '192.168.1.100'
+    # Method 4: Default fallback
+    fallback_ip = '192.168.10.122'
     logger.warning(f"Could not detect Bridge IP, using hardcoded fallback: {fallback_ip}")
     return fallback_ip

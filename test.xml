@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<VirtualInUdp Title="FreeAir2Lox-1.3test" Address="localhost" Port="5555">
+	<VirtualInUdpCmd Title="CO2" Check="&quot;device&quot;: &quot;1.3test&quot;\i&quot;co2&quot;: \i\v" Signed="false" Analog="true" SourceValLow="0" DestValLow="0" SourceValHigh="0" DestValHigh="0" DefVal="0" MinVal="0" MaxVal="5000" Unit="&lt;v&gt; ppm" HintText=""/>
+</VirtualInUdp>

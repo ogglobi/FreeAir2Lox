@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate, max-age=0">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>FreeAir2Lox-Bridge - Loxone Integration</title>
     <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
@@ -906,6 +909,14 @@
             display: flex;
         }
 
+        .hidden-modal {
+            display: none !important;
+        }
+
+        .hidden-modal.visible {
+            display: flex !important;
+        }
+
         .modal-content {
             background-color: var(--bg-tertiary);
             border: 1px solid var(--border-color);
@@ -1093,6 +1104,82 @@
         .circle-rating.indicator-level-2 .circle.filled { background-color: #f39c12; }
         .circle-rating.indicator-level-3 .circle.filled { background-color: #e67e22; }
         .circle-rating.indicator-level-4 .circle.filled { background-color: #e74c3c; }
+
+        /* Advanced Logs Styles (v1.3.0) */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .log-entry {
+            display: grid;
+            grid-template-columns: 140px 80px 1fr;
+            gap: 10px;
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--border-color);
+            align-items: center;
+        }
+
+        .log-entry:hover {
+            background-color: rgba(127, 182, 25, 0.05);
+        }
+
+        .log-time {
+            color: var(--text-muted);
+            font-size: 0.85rem;
+            white-space: nowrap;
+        }
+
+        .log-level {
+            font-weight: 700;
+            font-size: 0.75rem;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-align: center;
+            white-space: nowrap;
+            text-transform: uppercase;
+        }
+
+        .log-level.DEBUG {
+            background-color: #444;
+            color: #999;
+        }
+
+        .log-level.INFO {
+            background-color: rgba(127, 182, 25, 0.2);
+            color: var(--accent-green);
+        }
+
+        .log-level.WARNING {
+            background-color: rgba(245, 200, 66, 0.2);
+            color: var(--accent-yellow);
+        }
+
+        .log-level.ERROR {
+            background-color: rgba(248, 81, 73, 0.2);
+            color: var(--accent-red);
+        }
+
+        .log-message {
+            color: var(--text-secondary);
+            word-break: break-word;
+            white-space: pre-wrap;
+        }
+
+        .time-range-btn {
+            transition: all 0.2s !important;
+        }
+
+        .time-range-btn:hover {
+            border-color: var(--accent-green) !important;
+        }
+
+        .time-range-btn.active {
+            background: var(--accent-green) !important;
+            color: #000 !important;
+            border-color: var(--accent-green) !important;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -1147,14 +1234,15 @@
                 <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick zum Verwalten</div>
             </div>
 
-            <div class="widget online">
+            <div class="widget online" onclick="openAdvancedLogs()" style="cursor: pointer;">
                 <div class="widget-header">
-                    <div class="widget-location">Overall</div>
-                    <div class="widget-icon"><i class="bi bi-lightning-charge"></i></div>
+                    <div class="widget-location">FreeAir2Lox</div>
+                    <div class="widget-icon"><i class="bi bi-graph-up"></i></div>
                 </div>
-                <div class="widget-title">Aktive Geräte</div>
-                <div class="widget-subtitle">Online</div>
+                <div class="widget-title">FreeAir2Lox</div>
+                <div class="widget-subtitle">Aktive Geräte</div>
                 <div class="widget-value"><span id="devices-enabled">0</span></div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick für Logs</div>
             </div>
 
             <div class="widget online" id="loxone-widget" onclick="showLoxoneEditModal()" style="cursor: pointer;">
@@ -1190,37 +1278,94 @@
             </div>
         </div>
 
-        <!-- Logs Card -->
-        <div class="card-panel">
-            <div class="card-panel-header">
-                <div class="card-panel-title">
-                    <i class="card-panel-icon bi bi-terminal"></i>
-                    System Logs
+        <!-- Advanced Logs Modal (v1.3.0) -->
+        <div id="advanced-logs-container" style="position: fixed; top: 0; left: 0; right: 0; bottom: 0; z-index: 1000; background: rgba(0,0,0,0.5); justify-content: center; align-items: center; overflow: hidden; pointer-events: auto;" class="hidden-modal">
+            <div style="background: var(--bg-dark); max-width: 1400px; width: 90vw; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); max-height: 90vh; display: flex; flex-direction: column; pointer-events: auto;">
+                <!-- Header -->
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 1.5rem; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary);">
+                    <div style="display: flex; align-items: center; gap: 0.75rem; font-size: 1.2rem; font-weight: 600;">
+                        <i class="bi bi-graph-up"></i>
+                        Erweiterte Logs
+                    </div>
+                    <button onclick="closeAdvancedLogs()" style="background: none; border: none; color: var(--text-primary); font-size: 1.8rem; cursor: pointer; padding: 0; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;">×</button>
                 </div>
-                <button class="btn-icon" onclick="clearLogs()" title="Logs löschen">
-                    <i class="bi bi-trash"></i>
-                </button>
-            </div>
-            <div class="card-panel-body">
-                <div class="btn-group" style="margin-bottom: 1rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="logLevel" value="all"> Alle
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="logLevel" value="error"> Fehler
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="logLevel" value="warning"> Warnung
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="logLevel" value="info"> Info
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; cursor: pointer;">
-                        <input type="radio" name="logLevel" value="debug"> Debug
-                    </label>
+
+                <!-- Statistics Panel -->
+                <div id="logs-stats-panel" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 1rem; padding: 1.5rem; background: var(--bg-secondary); border-bottom: 1px solid var(--border-color);">
+                    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 4px solid var(--accent-green);">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Fehler (24h)</div>
+                        <div id="stat-errors" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-red);">-</div>
+                    </div>
+                    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 4px solid var(--accent-yellow);">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Warnungen (24h)</div>
+                        <div id="stat-warnings" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-yellow);">-</div>
+                    </div>
+                    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 4px solid var(--accent-green);">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Ø Antwortzeit</div>
+                        <div id="stat-avg-response" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-green);">-</div>
+                    </div>
+                    <div style="padding: 1rem; background: var(--bg-tertiary); border-radius: 6px; border-left: 4px solid var(--accent-green);">
+                        <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem;">Laufzeit</div>
+                        <div id="stat-uptime" style="font-size: 1.5rem; font-weight: 700; color: var(--accent-green);">-</div>
+                    </div>
                 </div>
-                <div class="log-viewer" id="log-viewer">
-                    <div style="color: var(--text-muted); text-align: center; padding: 1rem;">Wählen Sie ein Log-Level um die Logs anzuzeigen</div>
+
+                <!-- Main Content (Filter + Logs) -->
+                <div style="display: grid; grid-template-columns: 220px 1fr; gap: 0; flex: 1; overflow: hidden;">
+                    <!-- Filter Panel -->
+                    <div style="padding: 1.5rem; background: var(--bg-secondary); border-right: 1px solid var(--border-color); overflow-y: auto;">
+                        <div style="font-size: 0.9rem; font-weight: 600; color: var(--accent-green); margin-bottom: 1rem; text-transform: uppercase; border-bottom: 2px solid var(--accent-green); padding-bottom: 0.75rem;">Filter</div>
+
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; font-weight: 600;">Log-Level:</div>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="filter-debug" onchange="filterLogs()"> Debug
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="filter-info" onchange="filterLogs()"> Info
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="filter-warning" checked onchange="filterLogs()"> Warning
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 0.5rem; cursor: pointer;">
+                                <input type="checkbox" id="filter-error" checked onchange="filterLogs()"> Error
+                            </label>
+                        </div>
+
+                        <hr style="border-color: var(--border-color); margin: 1.5rem 0;">
+
+                        <div style="margin-bottom: 1.5rem;">
+                            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; font-weight: 600;">Zeitraum:</div>
+                            <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+                                <button class="time-range-btn" onclick="setTimeRange('1h')" data-range="1h" style="padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">1h</button>
+                                <button class="time-range-btn" onclick="setTimeRange('24h')" data-range="24h" style="padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--accent-green); border-radius: 4px; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s; font-weight: 600;">24h</button>
+                                <button class="time-range-btn" onclick="setTimeRange('7d')" data-range="7d" style="padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 4px; color: var(--text-secondary); cursor: pointer; font-size: 0.85rem; transition: all 0.2s;">7d</button>
+                            </div>
+                        </div>
+
+                        <hr style="border-color: var(--border-color); margin: 1.5rem 0;">
+
+                        <div>
+                            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.75rem; font-weight: 600;">Suche:</div>
+                            <input id="search-logs-input" type="text" placeholder="Suchtext..." style="width: 100%; padding: 0.5rem; background: var(--bg-tertiary); border: 1px solid var(--border-color); color: var(--text-primary); border-radius: 4px; font-size: 0.85rem;" onkeyup="debouncedFilterLogs()">
+                        </div>
+                    </div>
+
+                    <!-- Log Viewer -->
+                    <div style="display: flex; flex-direction: column; height: 100%; overflow: hidden;">
+                        <div style="padding: 1rem; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); display: flex; gap: 0.75rem; align-items: center; flex-shrink: 0;">
+                            <button onclick="togglePauseLogs()" id="pause-btn-logs" style="padding: 0.5rem 1rem; background: var(--accent-green); color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">⏸ Pause</button>
+                            <button onclick="clearLogsAdvanced()" style="padding: 0.5rem 1rem; background: var(--accent-red); color: #fff; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">🗑 Löschen</button>
+                            <button onclick="exportLogs()" style="padding: 0.5rem 1rem; background: var(--accent-green); color: #000; border: none; border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 0.85rem;">⬇️ Export</button>
+                            <div style="margin-left: auto; display: flex; align-items: center; gap: 0.5rem;">
+                                <span id="live-indicator" style="display: inline-block; width: 8px; height: 8px; background: #00ff41; border-radius: 50%; animation: pulse 1s infinite;"></span>
+                                <span id="live-text" style="font-size: 0.85rem; color: #00ff41; font-weight: 600;">● LIVE</span>
+                            </div>
+                        </div>
+                        <div id="log-entries-container" style="flex: 1; overflow-y: auto; overflow-x: hidden; font-family: 'Courier New', monospace; font-size: 0.85rem;">
+                            <div style="color: var(--text-muted); text-align: center; padding: 2rem;">Logs werden geladen...</div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1508,7 +1653,7 @@
         </div>
     </div>
 
-    <script src="/static/js/app.js?v=3"></script>
+    <script src="/static/js/app.js?v=4"></script>
     <script>
         // Note: showAddDeviceModal and closeAddDeviceModal are defined in app.js
 
@@ -1517,11 +1662,6 @@
             if (event.target === modal) {
                 closeAddDeviceModal();
             }
-        }
-
-        function filterLogs(level) {
-            document.querySelectorAll('.btn-group button').forEach(btn => btn.classList.remove('active'));
-            event.target.classList.add('active');
         }
 
         function clearLogs() {

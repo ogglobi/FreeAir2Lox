@@ -15,7 +15,16 @@ from functools import wraps
 from io import BytesIO
 from typing import Any, Dict, Optional
 
-from flask import Flask, jsonify, redirect, render_template, request, send_file, session
+from flask import (
+    Flask,
+    Response,
+    jsonify,
+    redirect,
+    render_template,
+    request,
+    send_file,
+    session,
+)
 
 # Import modular components
 from crypto_utils import decrypt_freeair_payload
@@ -44,6 +53,25 @@ class LogBufferHandler(logging.Handler):
             }
             with self._buffer_lock:
                 self.log_buffer.append(log_entry)
+
+            # ALSO add to advanced log buffer for new API (v1.3.0)
+            try:
+                log_buffer.add(
+                    level=record.levelname,
+                    module=record.module or 'app',
+                    message=self.format(record),
+                    context={}
+                )
+                # Write to file
+                LogFileRotation.write_log({
+                    'timestamp': datetime.now().isoformat(),
+                    'level': record.levelname,
+                    'module': record.module or 'app',
+                    'message': self.format(record)
+                })
+            except Exception:
+                pass  # Don't break if advanced logging fails
+
         except Exception:
             self.handleError(record)
 
@@ -85,6 +113,115 @@ class HTTPLogFilter(logging.Filter):
         # Allow everything else (errors, POST requests, non-200 responses)
         return True
 
+
+# ===== ADVANCED LOGGING INFRASTRUCTURE (v1.3.0) =====
+class LogBuffer:
+    """Circular buffer for structured in-memory log storage"""
+
+    def __init__(self, max_size=500):
+        self.buffer = deque(maxlen=max_size)
+        self.lock = threading.Lock()
+        self.log_id_counter = 0
+
+    def add(self, level, module, message, context=None):
+        """Add structured log entry to buffer"""
+        with self.lock:
+            self.log_id_counter += 1
+            entry = {
+                'id': f"log_{self.log_id_counter}",
+                'timestamp': datetime.utcnow().isoformat() + 'Z',
+                'level': level,
+                'module': module,
+                'message': message,
+                'context': context or {}
+            }
+            self.buffer.append(entry)
+            return entry
+
+    def get_all(self):
+        """Get all logs from buffer (reversed, newest first)"""
+        with self.lock:
+            return list(reversed(list(self.buffer)))
+
+    def clear(self):
+        """Clear buffer"""
+        with self.lock:
+            self.buffer.clear()
+            self.log_id_counter = 0
+
+    def get_filtered(self, level_filter=None, search_text='', device_filter=None, limit=100, offset=0):
+        """Get filtered logs"""
+        all_logs = self.get_all()
+
+        # Apply filters
+        filtered = all_logs
+        if level_filter:
+            filtered = [l for l in filtered if l['level'] in level_filter]
+        if search_text:
+            search_lower = search_text.lower()
+            filtered = [l for l in filtered if search_lower in l['message'].lower()]
+        if device_filter:
+            filtered = [l for l in filtered if l['context'].get('device') == device_filter]
+
+        # Pagination
+        total = len(filtered)
+        paginated = filtered[offset:offset+limit]
+
+        return {
+            'total': total,
+            'count': len(paginated),
+            'offset': offset,
+            'logs': paginated
+        }
+
+
+class LogFileRotation:
+    """Manage rotating log files with retention policy"""
+
+    LOG_DIR = '/app/logs'
+    RETENTION_DAYS = 7
+
+    @staticmethod
+    def ensure_dir():
+        """Ensure log directory exists"""
+        os.makedirs(LogFileRotation.LOG_DIR, exist_ok=True)
+
+    @staticmethod
+    def get_current_file():
+        """Get today's log file path"""
+        LogFileRotation.ensure_dir()
+        date_str = datetime.now().strftime('%Y-%m-%d')
+        return os.path.join(LogFileRotation.LOG_DIR, f'freeair2lox_{date_str}.log')
+
+    @staticmethod
+    def write_log(log_entry):
+        """Write log entry to file"""
+        try:
+            LogFileRotation.ensure_dir()
+            with open(LogFileRotation.get_current_file(), 'a', encoding='utf-8') as f:
+                f.write(f"[{log_entry['timestamp']}] {log_entry['level']:8} {log_entry['module']:15} {log_entry['message']}\n")
+        except Exception as e:
+            pass  # Silently fail to not break logging chain
+
+    @staticmethod
+    def cleanup_old_files():
+        """Delete logs older than RETENTION_DAYS"""
+        try:
+            LogFileRotation.ensure_dir()
+            cutoff = datetime.now() - timedelta(days=LogFileRotation.RETENTION_DAYS)
+            for filename in os.listdir(LogFileRotation.LOG_DIR):
+                if filename.startswith('freeair2lox_') and filename.endswith('.log'):
+                    try:
+                        file_date_str = filename.replace('freeair2lox_', '').replace('.log', '')
+                        file_date = datetime.strptime(file_date_str, '%Y-%m-%d')
+                        if file_date < cutoff:
+                            os.remove(os.path.join(LogFileRotation.LOG_DIR, filename))
+                    except ValueError:
+                        pass  # Skip files with unexpected names
+        except Exception as e:
+            pass  # Silently fail
+
+
 # ===== UNKNOWN DEVICES TRACKING =====
 # Track unknown FreeAir devices that try to connect
 unknown_devices = {}  # {serial_no: {'first_seen': timestamp, 'last_seen': timestamp, 'contact_count': N}}
@@ -111,6 +248,11 @@ log_buffer_handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s', d
 
 logger = logging.getLogger(__name__)
 app = Flask(__name__)
+app.start_time = time.time()  # Track app startup time for uptime calculation
+
+# Initialize advanced logging infrastructure (v1.3.0)
+log_buffer = LogBuffer(max_size=500)
+LogFileRotation.ensure_dir()  # Ensure log directory exists on startup
 
 # Configure werkzeug logger to use our filter
 werkzeug_logger = logging.getLogger('werkzeug')
@@ -123,8 +265,8 @@ app.config['JSON_SORT_KEYS'] = False
 # ===== SESSION CONFIGURATION =====
 app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'freeair2lox-dev-secret-key-change-in-production')
 app.config['SESSION_COOKIE_SECURE'] = os.getenv('FLASK_ENV') == 'production'  # HTTPS only in production
-app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent JavaScript access
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection
+app.config['SESSION_COOKIE_HTTPONLY'] = False  # Allow JavaScript/Fetch to access cookies (required for API authentication)
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection; Lax allows same-site form submissions and Fetch with credentials: include
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=7)  # 7-day session
 
 config_mgr = None
@@ -272,6 +414,13 @@ def require_login(f):
 
     return decorated_function
 
+@app.after_request
+def after_request(response):
+    """Add CORS headers to expose Content-Disposition for file downloads"""
+    # Expose Content-Disposition header so JavaScript can read the filename
+    response.headers['Access-Control-Expose-Headers'] = 'Content-Disposition'
+    return response
+
 @app.before_request
 def before_request():
     """Check authentication and setup status for all requests"""
@@ -281,12 +430,15 @@ def before_request():
     # Allow access to static files, login, first-setup, and FreeAir device API without auth
     if (request.path.startswith('/static/') or
         request.path in ['/login', '/first-setup', '/api/setup-check', '/api/setup-complete'] or
-        request.path.startswith('/apps/data/blucontrol/')):  # FreeAir device API
+        request.path.startswith('/apps/data/blucontrol/') or
+        (request.path.startswith('/api/devices/') and request.path.endswith(('/loxone-xml', '/loxone-virtual-outputs')))):  # FreeAir device API
         return
 
     # Check if first setup is still in progress - allow device and loxone API setup without auth
     if config_mgr and config_mgr.is_first_setup():
-        if request.path in ['/api/devices', '/api/loxone'] or request.path == '/first-setup':
+        if (request.path in ['/api/devices', '/api/loxone'] or 
+            request.path == '/first-setup' or
+            request.path.startswith('/api/devices/') and request.path.endswith(('/loxone-xml', '/loxone-virtual-outputs'))):
             return
 
     # Check if password is set
@@ -1204,11 +1356,13 @@ def api_get_loxone_xml(device_id):
                 break
 
         if not device:
+            logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
         # Get Loxone settings
         loxone_config = config_mgr.config.get('loxone', {})
         loxone_ip = loxone_config.get('ip', '192.168.1.50')
+        bridge_ip = get_bridge_ip()
 
         # Generate XML
         selected_fields = device.get('loxone_fields', [])
@@ -1216,19 +1370,20 @@ def api_get_loxone_xml(device_id):
             device.get('name'),
             selected_fields,
             port=5555,
-            loxone_ip=loxone_ip
+            bridge_ip=bridge_ip
         )
 
         if not xml_content:
             return jsonify({'error': 'Failed to generate XML'}), 400
 
         device_name = device.get('name', 'device')
+        logger.info(f"[XML] Generating Inputs XML for device '{device_name}'")
         xml_bytes = BytesIO(xml_content.encode('utf-8'))
         return send_file(
             xml_bytes,
             mimetype='application/xml',
             as_attachment=True,
-            download_name=f"FreeAir2Lox-Inputs-{device_name}.xml"
+            download_name=f"FreeAir2Lox_{device_name}-Inputs.xml"
         )
     except Exception as e:
         logger.error(f"Loxone XML error: {e}")
@@ -1249,18 +1404,20 @@ def api_get_loxone_virtual_outputs(device_id):
                 break
 
         if not device:
+            logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
         # Get Loxone settings
         loxone_config = config_mgr.config.get('loxone', {})
         loxone_ip = loxone_config.get('ip', '192.168.1.50')
+        bridge_ip = get_bridge_ip()
 
         # Generate VirtualOut XML
         from loxone_xml import generate_loxone_command_template
         xml_content = generate_loxone_command_template(
             device.get('name'),
             device.get('id'),
-            bridge_ip=loxone_ip,
+            bridge_ip=bridge_ip,
             bridge_port=80
         )
 
@@ -1270,11 +1427,12 @@ def api_get_loxone_virtual_outputs(device_id):
         # Return as XML file download
         xml_bytes = BytesIO(xml_content.encode('utf-8'))
         device_name = device.get('name', 'device')
+        logger.info(f"[XML] Generating Outputs XML for device '{device_name}'")
         return send_file(
             xml_bytes,
             mimetype='application/xml',
             as_attachment=True,
-            download_name=f"FreeAir2Lox-Befehle-{device_name}.xml"
+            download_name=f"FreeAir2Lox_{device_name}-Outputs.xml"
         )
     except Exception as e:
         logger.error(f"VirtualOut XML error: {e}")
@@ -1587,52 +1745,220 @@ def api_save_loxone():
         logger.error(f"Save loxone error: {e}")
         return jsonify({'success': False, 'error': str(e)}), 400
 
-# ===== LOG API ENDPOINTS =====
-@app.route('/api/logs')
-def api_get_logs():
-    """Get logs for UI display"""
-    try:
-        level = request.args.get('level', 'all')
-        limit = int(request.args.get('limit', 50))
-        logs = log_buffer_handler.get_logs(level=level, limit=limit)
-        return jsonify({'logs': logs})
-    except Exception as e:
-        logger.error(f"Error getting logs: {e}")
-        return jsonify({'logs': [], 'error': str(e)}), 500
+# ===== ADVANCED LOGGING API ENDPOINTS (v1.3.0) =====
 
-@app.route('/api/logs/level', methods=['PUT'])
-def api_set_log_level():
-    """Set logging level"""
+@app.route('/api/logs', methods=['GET'])
+def api_get_logs():
+    """Fetch logs with filtering and pagination
+
+    Query Parameters:
+    - level: Comma-separated log levels (INFO,WARNING,ERROR,DEBUG)
+    - search: Text search in message
+    - device: Filter by device serial or name
+    - limit: Max entries (default: 100, max: 1000)
+    - offset: For pagination (default: 0)
+    - time_range: '1h', '24h', '7d' (default: '24h')
+    """
     try:
-        data = json.loads(request.data.decode('utf-8'))
-        level_str = data.get('level', 'INFO').upper()
-        level_map = {
-            'DEBUG': logging.DEBUG,
-            'INFO': logging.INFO,
-            'WARNING': logging.WARNING,
-            'ERROR': logging.ERROR,
-            'CRITICAL': logging.CRITICAL
-        }
-        if level_str in level_map:
-            logging.getLogger().setLevel(level_map[level_str])
-            logger.info(f"Log level changed to {level_str}")
-            return jsonify({'success': True, 'level': level_str})
-        else:
-            return jsonify({'success': False, 'error': f'Invalid level: {level_str}'}), 400
+        # Get filters from query params
+        level_filter = request.args.get('level', '').split(',') if request.args.get('level') else []
+        search_text = request.args.get('search', '').lower()
+        device_filter = request.args.get('device', '')
+        limit = min(int(request.args.get('limit', 100)), 1000)
+        offset = int(request.args.get('offset', 0))
+
+        # Get all logs from buffer
+        all_logs = log_buffer.get_all()
+
+        # Apply filters
+        filtered = all_logs
+        if level_filter and level_filter[0]:  # Only filter if level_filter has content
+            filtered = [l for l in filtered if l['level'] in level_filter]
+        if search_text:
+            filtered = [l for l in filtered if search_text in l['message'].lower()
+                       or search_text in l.get('module', '').lower()]
+        if device_filter:
+            filtered = [l for l in filtered if l.get('context', {}).get('device') == device_filter]
+
+        # Pagination
+        total = len(filtered)
+        paginated = filtered[offset:offset+limit]
+
+        return jsonify({
+            'success': True,
+            'total': total,
+            'count': len(paginated),
+            'offset': offset,
+            'logs': paginated
+        }), 200
+
     except Exception as e:
-        logger.error(f"Error setting log level: {e}")
+        logger.error(f"Error getting logs: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/logs/stream', methods=['GET'])
+def api_logs_stream():
+    """Server-Sent Events (SSE) for real-time log streaming
+
+    Returns: Stream of log entries as JSON objects
+    """
+    try:
+        # Read request args BEFORE creating generator (inside request context)
+        last_id = int(request.args.get('last_id', 0))
+
+        def generate_stream(last_id_val):
+            """Generator for SSE stream"""
+            last_id = last_id_val
+
+            while True:
+                try:
+                    all_logs = log_buffer.get_all()
+                    # Only send new logs
+                    for log in all_logs:
+                        try:
+                            log_num = int(log['id'].split('_')[1])
+                        except (ValueError, IndexError):
+                            continue
+
+                        if log_num > last_id:
+                            yield f"data: {json.dumps(log, ensure_ascii=False)}\n\n"
+                            last_id = log_num
+
+                    time.sleep(0.5)  # Check every 500ms
+                except Exception as e:
+                    logger.error(f"Error in SSE stream: {e}")
+                    yield f"data: {json.dumps({'error': str(e)})}\n\n"
+                    break
+
+        return Response(generate_stream(last_id), mimetype='text/event-stream'), 200
+
+    except Exception as e:
+        logger.error(f"Error in logs stream: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/logs/stats', methods=['GET'])
+def api_logs_stats():
+    """Get logging statistics
+
+    Returns: Error count, warning count, avg response time, uptime, etc.
+    """
+    try:
+        all_logs = log_buffer.get_all()
+        errors = [l for l in all_logs if l['level'] == 'ERROR']
+        warnings = [l for l in all_logs if l['level'] == 'WARNING']
+
+        # Calculate avg response time from context
+        response_times = [l.get('context', {}).get('response_time_ms', 0)
+                         for l in all_logs if 'response_time_ms' in l.get('context', {})]
+        avg_time = sum(response_times) / len(response_times) if response_times else 0
+
+        # Calculate disk usage
+        disk_usage_mb = 0
+        try:
+            log_dir = '/app/logs'
+            if os.path.exists(log_dir):
+                disk_usage_mb = sum(
+                    os.path.getsize(os.path.join(log_dir, f))
+                    for f in os.listdir(log_dir) if os.path.isfile(os.path.join(log_dir, f))
+                ) / (1024 * 1024)
+        except Exception as e:
+            logger.debug(f"Error calculating disk usage: {e}")
+
+        return jsonify({
+            'total_logs': len(all_logs),
+            'errors_24h': len(errors),
+            'warnings_24h': len(warnings),
+            'avg_response_time_ms': round(avg_time, 2),
+            'uptime_seconds': int(time.time() - app.start_time) if hasattr(app, 'start_time') else 0,
+            'disk_usage_mb': round(disk_usage_mb, 2),
+            'retention_days': 7
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error getting log stats: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/logs/export', methods=['POST'])
+def api_logs_export():
+    """Export logs as file (CSV, JSON, or TXT)
+
+    POST body:
+    {
+        "level": "INFO,ERROR",
+        "time_range": "7d",
+        "format": "csv|json|txt"
+    }
+    """
+    try:
+        data = request.get_json() if request.is_json else {}
+        level_filter = data.get('level', '').split(',') if data.get('level') else []
+        format_type = data.get('format', 'txt').lower()  # txt, csv, json
+
+        if format_type not in ['txt', 'csv', 'json']:
+            return jsonify({'error': f'Invalid format: {format_type}'}), 400
+
+        all_logs = log_buffer.get_all()
+        if level_filter and level_filter[0]:
+            all_logs = [l for l in all_logs if l['level'] in level_filter]
+
+        # Generate file content
+        if format_type == 'json':
+            content = json.dumps(all_logs, indent=2, ensure_ascii=False)
+            mime = 'application/json'
+            ext = 'json'
+        elif format_type == 'csv':
+            import csv
+            from io import StringIO
+            output = StringIO()
+            writer = csv.writer(output)
+            writer.writerow(['Timestamp', 'Level', 'Module', 'Message', 'Context'])
+            for log in all_logs:
+                writer.writerow([
+                    log['timestamp'],
+                    log['level'],
+                    log.get('module', ''),
+                    log['message'],
+                    json.dumps(log.get('context', {}), ensure_ascii=False)
+                ])
+            content = output.getvalue()
+            mime = 'text/csv'
+            ext = 'csv'
+        else:  # txt
+            lines = [
+                f"[{log['timestamp']}] {log['level']:8} {log.get('module', 'unknown'):15} {log['message']}"
+                for log in all_logs
+            ]
+            content = '\n'.join(lines)
+            mime = 'text/plain'
+            ext = 'txt'
+
+        filename = f"freeair2lox-logs_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.{ext}"
+
+        return send_file(
+            BytesIO(content.encode('utf-8')),
+            mimetype=mime,
+            as_attachment=True,
+            download_name=filename
+        ), 200
+
+    except Exception as e:
+        logger.error(f"Error exporting logs: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/logs/clear', methods=['POST'])
 def api_clear_logs():
-    """Clear log buffer"""
+    """Clear in-memory log buffer (does NOT delete log files)"""
     try:
-        with log_buffer_handler._buffer_lock:
-            log_buffer_handler.log_buffer.clear()
-        logger.info("Log buffer cleared")
-        return jsonify({'success': True})
+        log_buffer.clear()
+        logger.info("Log buffer cleared by user")
+        return jsonify({'success': True}), 200
+
     except Exception as e:
-        logger.error(f"Error clearing logs: {e}")
+        logger.error(f"Error clearing logs: {e}", exc_info=True)
         return jsonify({'success': False, 'error': str(e)}), 500
 
 if __name__ == '__main__':
