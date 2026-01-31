@@ -134,9 +134,9 @@ def generate_loxone_command_template(
     comfort_post = '{"device_id": "' + device_id + '", "command": "set_comfort_level", "value": <v>}'
     operating_mode_post = '{"device_id": "' + device_id + '", "command": "set_operating_mode", "value": <v>}'
 
-    # XML-escape for VirtualOut format
-    comfort_post_xml = comfort_post.replace('"', '&quot;').replace('<', '&lt;')
-    operating_mode_post_xml = operating_mode_post.replace('"', '&quot;').replace('<', '&lt;')
+    # XML-escape for VirtualOut format: ONLY escape quotes, preserve <v> placeholder
+    comfort_post_xml = comfort_post.replace('"', '&quot;')
+    operating_mode_post_xml = operating_mode_post.replace('"', '&quot;')
 
     # Build HTTP Header with API Key authentication
     http_header = f"Authorization: Bearer {api_key}\nContent-Type: application/json"
