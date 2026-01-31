@@ -141,7 +141,8 @@ def generate_loxone_command_template(
     operating_mode_post_xml = operating_mode_post.replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
 
     # Build HTTP Header with API Key authentication
-    http_header = f"Authorization: Bearer {api_key}\nContent-Type: application/json"
+    # CRITICAL: HTTP headers must use \r\n (CRLF) not just \n (LF)
+    http_header = f"Authorization: Bearer {api_key}\r\nContent-Type: application/json"
 
     xml_lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
