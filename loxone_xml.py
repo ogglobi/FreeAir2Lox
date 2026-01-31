@@ -131,12 +131,14 @@ def generate_loxone_command_template(
     api_path = "/api/command"
 
     # Build JSON POST bodies with Loxone <v> variable for value
+    # CRITICAL: <v> must be UNQUOTED (no quotes) for numeric Analog values
+    # It will be escaped to &lt;v&gt; in the XML output
     comfort_post = '{"device_id": "' + device_id + '", "command": "set_comfort_level", "value": <v>}'
     operating_mode_post = '{"device_id": "' + device_id + '", "command": "set_operating_mode", "value": <v>}'
 
-    # XML-escape for VirtualOut format: ONLY escape quotes, preserve <v> placeholder
-    comfort_post_xml = comfort_post.replace('"', '&quot;')
-    operating_mode_post_xml = operating_mode_post.replace('"', '&quot;')
+    # XML-escape: quotes to &quot;, < to &lt;, > to &gt;
+    comfort_post_xml = comfort_post.replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
+    operating_mode_post_xml = operating_mode_post.replace('"', '&quot;').replace('<', '&lt;').replace('>', '&gt;')
 
     # Build HTTP Header with API Key authentication
     http_header = f"Authorization: Bearer {api_key}\nContent-Type: application/json"

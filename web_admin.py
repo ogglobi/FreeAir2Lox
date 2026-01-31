@@ -1392,7 +1392,7 @@ def api_get_loxone_xml(device_id):
             xml_bytes,
             mimetype='application/xml',
             as_attachment=True,
-            download_name=f"FreeAir2Lox_{device_name}-Inputs.xml"
+            download_name=f"FreeAir2Lox_{device_name.replace(' ', '_')}-Inputs.xml"
         )
     except Exception as e:
         logger.error(f"Loxone XML error: {e}")
@@ -1441,7 +1441,7 @@ def api_get_loxone_virtual_outputs(device_id):
             xml_bytes,
             mimetype='application/xml',
             as_attachment=True,
-            download_name=f"FreeAir2Lox_{device_name}-Outputs.xml"
+            download_name=f"FreeAir2Lox_{device_name.replace(' ', '_')}-Outputs.xml"
         )
     except Exception as e:
         logger.error(f"VirtualOut XML error: {e}")
@@ -1542,12 +1542,22 @@ def api_loxone_command():
     global device_commands, device_values, device_last_mode
 
     try:
+        # DEBUG: Print raw request for troubleshooting (visible in stdout)
+        import sys
+        print(f"\n=== LOXONE COMMAND DEBUG ===", file=sys.stderr)
+        print(f"Raw body: {request.data}", file=sys.stderr)
+        print(f"Content-Type: {request.headers.get('Content-Type', 'none')}", file=sys.stderr)
+        print(f"All headers: {dict(request.headers)}", file=sys.stderr)
+        
         # Parse request data directly - works with ANY Content-Type
         data = {}
         if request.data:
             try:
                 data = json.loads(request.data.decode('utf-8'))
-            except (json.JSONDecodeError, UnicodeDecodeError, ValueError):
+                print(f"Parsed JSON: {data}", file=sys.stderr)
+                print(f"  device_id={data.get('device_id')}, command={data.get('command')}, value={data.get('value')}", file=sys.stderr)
+            except (json.JSONDecodeError, UnicodeDecodeError, ValueError) as e:
+                print(f"JSON parse error: {e}", file=sys.stderr)
                 data = {}
 
         # ===== Detect input format =====
