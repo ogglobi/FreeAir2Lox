@@ -111,7 +111,8 @@ def generate_loxone_command_template(
     device_name: str,
     device_id: str,
     bridge_ip: str = "192.168.10.122",
-    bridge_port: int = 80
+    bridge_port: int = 80,
+    api_key: str = ""
 ) -> str:
     """
     Generate Loxone VirtualOut XML configuration for sending commands to the Bridge.
@@ -121,6 +122,7 @@ def generate_loxone_command_template(
         device_id: Device identifier (e.g., "musik")
         bridge_ip: Bridge IP address
         bridge_port: Bridge HTTP port
+        api_key: API Key for Bearer token authentication
 
     Returns:
         XML string for Loxone VirtualOut configuration
@@ -132,16 +134,19 @@ def generate_loxone_command_template(
     comfort_post = '{"device_id": "' + device_id + '", "command": "set_comfort_level", "value": <v>}'
     operating_mode_post = '{"device_id": "' + device_id + '", "command": "set_operating_mode", "value": <v>}'
 
-    # Escape for XML (but preserve <v> as is)
-    comfort_post_xml = comfort_post.replace('"', '&quot;')
-    operating_mode_post_xml = operating_mode_post.replace('"', '&quot;')
+    # XML-escape for VirtualOut format
+    comfort_post_xml = comfort_post.replace('"', '&quot;').replace('<', '&lt;')
+    operating_mode_post_xml = operating_mode_post.replace('"', '&quot;').replace('<', '&lt;')
+
+    # Build HTTP Header with API Key authentication
+    http_header = f"Authorization: Bearer {api_key}\nContent-Type: application/json"
 
     xml_lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
         f'<VirtualOut Title="FreeAir2Lox-{device_name}" Address="{address}" CmdInit="" HintText="" CloseAfterSend="true" CmdSep="">',
         '\t<Info templateType="3" minVersion="16011106"/>',
-        f'\t<VirtualOutCmd Title="Komfortstufe (1-5)" Comment="FreeAir Comfort Level" CmdOnMethod="POST" CmdOn="{api_path}" CmdOnPost="{comfort_post_xml}" Analog="true" Repeat="0" RepeatRate="0" HintText="Komfort Level 1-5"/>',
-        f'\t<VirtualOutCmd Title="Betriebsmodus" Comment="FreeAir Operating Mode" CmdOnMethod="POST" CmdOn="{api_path}" CmdOnPost="{operating_mode_post_xml}" Analog="true" Repeat="0" RepeatRate="0" HintText="Operating Mode"/>',
+        f'\t<VirtualOutCmd Title="Komfortstufe (1-5)" Comment="FreeAir Comfort Level" CmdOnMethod="POST" CmdOn="{api_path}" CmdOnHTTP="{http_header}" CmdOnPost="{comfort_post_xml}" Analog="true" Repeat="0" RepeatRate="0" HintText="Komfort Level 1-5"/>',
+        f'\t<VirtualOutCmd Title="Betriebsmodus" Comment="FreeAir Operating Mode" CmdOnMethod="POST" CmdOn="{api_path}" CmdOnHTTP="{http_header}" CmdOnPost="{operating_mode_post_xml}" Analog="true" Repeat="0" RepeatRate="0" HintText="Operating Mode"/>',
         '</VirtualOut>'
     ]
 

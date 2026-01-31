@@ -434,6 +434,16 @@ def before_request():
         (request.path.startswith('/api/devices/') and request.path.endswith(('/loxone-xml', '/loxone-virtual-outputs')))):  # FreeAir device API
         return
 
+    # Validate API Key for Loxone command endpoints
+    if request.path in ['/api/command', '/api/loxone-command']:
+        auth_header = request.headers.get('Authorization', '')
+        if auth_header.startswith('Bearer '):
+            api_key = auth_header[7:]  # Remove 'Bearer ' prefix
+            if config_mgr and api_key == config_mgr.config.get('loxone', {}).get('api_key'):
+                return  # API Key valid, allow request
+        logger.warning(f"Unauthorized command request from {request.remote_addr}")
+        return jsonify({'error': 'Invalid or missing API Key'}), 401
+
     # Check if first setup is still in progress - allow device and loxone API setup without auth
     if config_mgr and config_mgr.is_first_setup():
         if (request.path in ['/api/devices', '/api/loxone'] or
@@ -1359,8 +1369,9 @@ def api_get_loxone_xml(device_id):
             logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
-        # Get bridge IP for XML
+        # Get bridge IP and API Key for XML
         bridge_ip = get_bridge_ip()
+        api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
 
         # Generate XML
         selected_fields = device.get('loxone_fields', [])
@@ -1405,8 +1416,9 @@ def api_get_loxone_virtual_outputs(device_id):
             logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
-        # Get bridge IP for XML
+        # Get bridge IP and API Key for XML
         bridge_ip = get_bridge_ip()
+        api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
 
         # Generate VirtualOut XML
         from loxone_xml import generate_loxone_command_template
@@ -1414,7 +1426,8 @@ def api_get_loxone_virtual_outputs(device_id):
             device.get('name'),
             device.get('id'),
             bridge_ip=bridge_ip,
-            bridge_port=80
+            bridge_port=80,
+            api_key=api_key
         )
 
         if not xml_content:

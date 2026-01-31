@@ -5,6 +5,7 @@ FreeAir Bridge - Configuration Management
 import json
 import logging
 import os
+import uuid
 from dataclasses import asdict, dataclass, field
 from typing import List, Optional
 
@@ -38,6 +39,7 @@ class LoxoneConfig:
     ip: str
     port: int
     enabled: bool = True
+    api_key: str = ""  # Auto-generated UUID for API authentication
 
     def to_dict(self):
         return asdict(self)
@@ -56,7 +58,8 @@ class ConfigManager:
         "loxone": {
             "ip": "192.168.1.50",
             "port": 5555,
-            "enabled": True
+            "enabled": True,
+            "api_key": ""
         },
         "http_port": 80,
         "udp_port": 5555,
@@ -67,6 +70,7 @@ class ConfigManager:
         self.config_dir = os.path.dirname(self.CONFIG_FILE)
         self.ensure_config_dir()
         self.config = self.load_config()
+        self.ensure_api_key()  # Auto-generate API key if missing
 
     def ensure_config_dir(self):
         """Ensure config directory exists"""
@@ -84,6 +88,15 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Error loading config: {e}")
             return self.DEFAULT_CONFIG
+
+    def ensure_api_key(self):
+        """Ensure API key exists, generate if missing"""
+        loxone = self.config.get("loxone", {})
+        if not loxone.get("api_key"):
+            loxone["api_key"] = str(uuid.uuid4())
+            self.config["loxone"] = loxone
+            self.save_config()
+            logger.info(f"Generated new API key for Loxone commands: {loxone['api_key']}")
 
     def save_config(self, config: dict = None):
         """Save configuration to file"""
