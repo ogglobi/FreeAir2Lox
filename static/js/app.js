@@ -3187,8 +3187,8 @@ async function loadServerCheckboxesForDevice(deviceId) {
         // Get assigned servers for this device - fetch ALL devices and find the one we want
         const devicesRes = await fetch('/api/devices');
         if (!devicesRes.ok) return '';
-        const devicesData = await devicesRes.json();
-        const device = devicesData.devices.find(d => d.id === deviceId);
+        const devicesArray = await devicesRes.json();
+        const device = devicesArray.find(d => d.id === deviceId);
         if (!device) return '<div style="color: var(--accent-red);">Gerät nicht gefunden</div>';
         const assignedServers = device.loxone_servers || [];
         
