@@ -2245,7 +2245,7 @@ async function downloadLoxoneXml() {
 
         showAlert(`XML erfolgreich heruntergeladen: ${filename}`, 'success');
     } catch (error) {
-        logger.error('XML download error:', error);
+        console.error('XML download error:', error);
         showAlert(`XML-Download fehlgeschlagen: ${error.message}`, 'error');
     }
 }
@@ -2323,7 +2323,7 @@ async function downloadLoxoneVirtualOut() {
 
         showAlert(`VirtualOut erfolgreich heruntergeladen: ${filename}`, 'success');
     } catch (error) {
-        logger.error('VirtualOut download error:', error);
+        console.error('VirtualOut download error:', error);
         showAlert(`VirtualOut-Download fehlgeschlagen: ${error.message}`, 'error');
     }
 }
@@ -3181,12 +3181,15 @@ async function loadServerCheckboxesForDevice(deviceId) {
         // Get all servers
         const serversRes = await fetch('/api/loxone/servers');
         if (!serversRes.ok) return '';
-        const servers = await serversRes.json();
+        const serversData = await serversRes.json();
+        const servers = serversData.servers || [];
         
-        // Get assigned servers for this device
-        const assignedRes = await fetch(`/api/devices/${deviceId}`);
-        if (!assignedRes.ok) return '';
-        const device = await assignedRes.json();
+        // Get assigned servers for this device - fetch ALL devices and find the one we want
+        const devicesRes = await fetch('/api/devices');
+        if (!devicesRes.ok) return '';
+        const devicesData = await devicesRes.json();
+        const device = devicesData.devices.find(d => d.id === deviceId);
+        if (!device) return '<div style="color: var(--accent-red);">Gerät nicht gefunden</div>';
         const assignedServers = device.loxone_servers || [];
         
         let html = `
