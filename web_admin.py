@@ -434,13 +434,22 @@ def before_request():
         (request.path.startswith('/api/devices/') and request.path.endswith(('/loxone-xml', '/loxone-virtual-outputs')))):  # FreeAir device API
         return
 
-    # Validate API Key for Loxone command endpoints
+    # Validate API Key for Loxone command endpoints (v1.4.0 - Support ANY assigned server)
     if request.path in ['/api/command', '/api/loxone-command']:
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
             api_key = auth_header[7:]  # Remove 'Bearer ' prefix
-            if config_mgr and api_key == config_mgr.config.get('loxone', {}).get('api_key'):
-                return  # API Key valid, allow request
+            
+            # Check against ALL configured Loxone servers
+            if config_mgr:
+                for server in config_mgr.get_loxone_servers():
+                    if api_key == server.api_key:
+                        return  # API Key valid for this server, allow request
+                
+                # Fallback: Check old single-server config for backward compatibility
+                if api_key == config_mgr.config.get('loxone', {}).get('api_key'):
+                    return  # Old API key still valid
+        
         logger.warning(f"Unauthorized command request from {request.remote_addr}")
         return jsonify({'error': 'Invalid or missing API Key'}), 401
 
@@ -567,7 +576,12 @@ def is_device_locked(device_name: str) -> bool:
 
 
 def send_to_loxone(device_name, values):
-    """Send device values to Loxone via UDP"""
+    """
+    Send device values to Loxone via UDP (v1.4.0 - Multi-Server Support)
+    
+    Each device can be assigned to multiple Loxone servers.
+    This function sends the data to ALL assigned servers.
+    """
     try:
         # CHECK COMMAND LOCK - Don't send if waiting for command confirmation
         actual_comfort = values.get('comfort_level')
@@ -581,25 +595,22 @@ def send_to_loxone(device_name, values):
             logger.error("Config manager not available")
             return
 
-        lox_config = config_mgr.config.get('loxone', {})
-        if not lox_config.get('enabled'):
-            logger.debug("Loxone not enabled")
-            return
-
-        lox_ip = lox_config.get('ip', '')
-        lox_port = lox_config.get('port', 5555)
-
-        if not lox_ip:
-            logger.error("Loxone IP not configured")
-            return
-
-
-        # Get device configuration to check loxone_fields preference
+        # Get device configuration to check loxone_fields preference and server assignments
         device = None
         for dev in config_mgr.get_devices():
             if dev.name == device_name:
                 device = dev
                 break
+
+        if not device:
+            logger.warning(f"Device {device_name} not found in config")
+            return
+
+        # Get all Loxone servers this device is assigned to
+        assigned_servers = config_mgr.get_device_servers(device.id)
+        if not assigned_servers:
+            logger.debug(f"Device {device_name} not assigned to any Loxone servers")
+            return
 
         # All available fields mapping
         all_fields = {
@@ -677,11 +688,20 @@ def send_to_loxone(device_name, values):
         # Use ensure_ascii=False to preserve German umlauts (ä, ö, ü) for Loxone
         message = json.dumps(message_data, ensure_ascii=False)
 
-        sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        sock.sendto(message.encode('utf-8'), (lox_ip, int(lox_port)))
-        sock.close()
+        # Send to ALL assigned Loxone servers (v1.4.0)
+        for lox_server in assigned_servers:
+            if not lox_server.enabled:
+                logger.debug(f"Loxone server {lox_server.id} is disabled, skipping")
+                continue
 
-        logger.info(f"Sent to Loxone ({lox_ip}:{lox_port}): {message}")
+            try:
+                sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                sock.sendto(message.encode('utf-8'), (lox_server.ip, int(lox_server.port)))
+                sock.close()
+                logger.info(f"UDP -> Loxone '{lox_server.name}' ({lox_server.ip}:{lox_server.port}): {device_name}")
+            except Exception as e:
+                logger.error(f"Error sending to Loxone server {lox_server.id}: {e}")
+
     except Exception as e:
         logger.error(f"Error sending to Loxone: {e}")
 
