@@ -1470,6 +1470,7 @@ def api_devices():
                     'password': dev.password,
                     'enabled': dev.enabled,
                     'loxone_fields': dev.loxone_fields,
+                    'loxone_servers': dev.loxone_servers,
                     'rssi': rssi,
                     'last_data': last_data
                 })
