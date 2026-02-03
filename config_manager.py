@@ -14,6 +14,23 @@ from werkzeug.security import check_password_hash, generate_password_hash
 logger = logging.getLogger(__name__)
 
 @dataclass
+class LoxoneServer:
+    """Loxone Miniserver Configuration (v1.4.0+)"""
+    id: str  # Unique identifier (e.g., 'default', 'loxone_office', etc.)
+    name: str  # Human-readable name (e.g., 'Wohnzimmer Miniserver')
+    ip: str
+    port: int
+    api_key: str = ""  # Auto-generated UUID for API authentication
+    enabled: bool = True
+
+    def to_dict(self):
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(data: dict):
+        return LoxoneServer(**data)
+
+@dataclass
 class FreeAirDevice:
     """FreeAir Device Configuration"""
     id: str
@@ -22,6 +39,7 @@ class FreeAirDevice:
     password: str
     enabled: bool = True
     loxone_fields: list = field(default_factory=list)
+    loxone_servers: list = field(default_factory=list)  # List of server IDs this device sends to (v1.4.0+)
 
     def to_dict(self):
         return asdict(self)
@@ -31,6 +49,9 @@ class FreeAirDevice:
         # Handle missing loxone_fields in older configs
         if 'loxone_fields' not in data:
             data['loxone_fields'] = []
+        # Handle missing loxone_servers for backward compatibility (v1.3 -> v1.4 migration)
+        if 'loxone_servers' not in data:
+            data['loxone_servers'] = []
         return FreeAirDevice(**data)
 
 @dataclass
@@ -61,6 +82,7 @@ class ConfigManager:
             "enabled": True,
             "api_key": ""
         },
+        "loxone_servers": [],  # New in v1.4.0
         "http_port": 80,
         "udp_port": 5555,
         "admin_password_hash": None
@@ -70,6 +92,7 @@ class ConfigManager:
         self.config_dir = os.path.dirname(self.CONFIG_FILE)
         self.ensure_config_dir()
         self.config = self.load_config()
+        self._migrate_legacy_loxone_config()  # Auto-migrate v1.3 -> v1.4
         self.ensure_api_key()  # Auto-generate API key if missing
 
     def ensure_config_dir(self):
@@ -97,6 +120,65 @@ class ConfigManager:
             self.config["loxone"] = loxone
             self.save_config()
             logger.info(f"Generated new API key for Loxone commands: {loxone['api_key']}")
+
+    def _migrate_legacy_loxone_config(self):
+        """
+        Auto-migrate from v1.3 single-server config to v1.4 multi-server config.
+        
+        v1.3 structure:
+        {
+            "loxone": {"ip": "192.168.1.50", "port": 5555, "enabled": True, "api_key": "..."}
+        }
+        
+        v1.4 structure:
+        {
+            "loxone": {...},  # Kept for backward compatibility
+            "loxone_servers": [
+                {
+                    "id": "default",
+                    "name": "Default Miniserver",
+                    "ip": "192.168.1.50",
+                    "port": 5555,
+                    "api_key": "...",
+                    "enabled": True
+                }
+            ]
+        }
+        
+        Devices get auto-assigned to "default" server on first migration.
+        """
+        try:
+            # Check if migration already done
+            if "loxone_servers" in self.config and len(self.config.get("loxone_servers", [])) > 0:
+                return  # Already migrated
+            
+            # Initialize loxone_servers if missing
+            if "loxone_servers" not in self.config:
+                self.config["loxone_servers"] = []
+            
+            # Migrate old loxone config to new servers array
+            old_loxone = self.config.get("loxone", {})
+            if old_loxone and old_loxone.get("ip"):  # Only migrate if old config exists
+                default_server = {
+                    "id": "default",
+                    "name": "Default Miniserver",
+                    "ip": old_loxone.get("ip", "192.168.1.50"),
+                    "port": old_loxone.get("port", 5555),
+                    "api_key": old_loxone.get("api_key", ""),
+                    "enabled": old_loxone.get("enabled", True)
+                }
+                self.config["loxone_servers"] = [default_server]
+                logger.info("Migrated legacy Loxone config to multi-server format")
+            
+            # Auto-assign all devices to "default" server if not already assigned
+            for device in self.config.get("devices", []):
+                if not device.get("loxone_servers"):
+                    device["loxone_servers"] = ["default"]
+            
+            self.save_config()
+            logger.info("Completed migration from v1.3 to v1.4 config format")
+        except Exception as e:
+            logger.error(f"Error during legacy config migration: {e}")
 
     def save_config(self, config: dict = None):
         """Save configuration to file"""
@@ -192,6 +274,144 @@ class ConfigManager:
         except Exception as e:
             logger.error(f"Error updating Loxone config: {e}")
             return False
+
+    # ===== MULTI-SERVER LOXONE METHODS (v1.4.0+) =====
+
+    def get_loxone_servers(self) -> List[LoxoneServer]:
+        """Get all configured Loxone servers"""
+        servers = []
+        for server_data in self.config.get("loxone_servers", []):
+            try:
+                servers.append(LoxoneServer.from_dict(server_data))
+            except Exception as e:
+                logger.error(f"Error loading Loxone server: {e}")
+        return servers
+
+    def get_loxone_server(self, server_id: str) -> Optional[LoxoneServer]:
+        """Get specific Loxone server by ID"""
+        for server_data in self.config.get("loxone_servers", []):
+            if server_data.get("id") == server_id:
+                try:
+                    return LoxoneServer.from_dict(server_data)
+                except Exception as e:
+                    logger.error(f"Error loading Loxone server {server_id}: {e}")
+        return None
+
+    def add_loxone_server(self, server: LoxoneServer) -> bool:
+        """Add a new Loxone server"""
+        try:
+            # Check if server ID already exists
+            existing_ids = [s.get("id") for s in self.config.get("loxone_servers", [])]
+            if server.id in existing_ids:
+                logger.error(f"Loxone server ID {server.id} already exists")
+                return False
+            
+            # Auto-generate API key if not provided
+            if not server.api_key:
+                server.api_key = str(uuid.uuid4())
+            
+            self.config["loxone_servers"].append(server.to_dict())
+            self.save_config()
+            logger.info(f"Loxone server {server.id} added with IP {server.ip}:{server.port}")
+            return True
+        except Exception as e:
+            logger.error(f"Error adding Loxone server: {e}")
+            return False
+
+    def update_loxone_server(self, server_id: str, server: LoxoneServer) -> bool:
+        """Update existing Loxone server"""
+        try:
+            for i, s in enumerate(self.config.get("loxone_servers", [])):
+                if s.get("id") == server_id:
+                    self.config["loxone_servers"][i] = server.to_dict()
+                    self.save_config()
+                    logger.info(f"Loxone server {server_id} updated")
+                    return True
+            logger.error(f"Loxone server {server_id} not found")
+            return False
+        except Exception as e:
+            logger.error(f"Error updating Loxone server: {e}")
+            return False
+
+    def delete_loxone_server(self, server_id: str) -> bool:
+        """Delete Loxone server"""
+        try:
+            # Prevent deletion of the "default" server if it's the only one
+            if server_id == "default":
+                remaining_servers = [s for s in self.config.get("loxone_servers", []) if s.get("id") != "default"]
+                if not remaining_servers:
+                    logger.error("Cannot delete the only Loxone server (default)")
+                    return False
+            
+            # Remove server from config
+            self.config["loxone_servers"] = [s for s in self.config.get("loxone_servers", []) if s.get("id") != server_id]
+            
+            # Remove server assignments from all devices
+            for device in self.config.get("devices", []):
+                device["loxone_servers"] = [srv_id for srv_id in device.get("loxone_servers", []) if srv_id != server_id]
+            
+            self.save_config()
+            logger.info(f"Loxone server {server_id} deleted and unassigned from all devices")
+            return True
+        except Exception as e:
+            logger.error(f"Error deleting Loxone server: {e}")
+            return False
+
+    def assign_device_to_server(self, device_id: str, server_id: str) -> bool:
+        """Assign a device to a Loxone server"""
+        try:
+            # Verify device exists
+            device_found = False
+            for device in self.config.get("devices", []):
+                if device.get("id") == device_id:
+                    device_found = True
+                    if server_id not in device.get("loxone_servers", []):
+                        device["loxone_servers"].append(server_id)
+                    break
+            
+            if not device_found:
+                logger.error(f"Device {device_id} not found")
+                return False
+            
+            # Verify server exists
+            server_found = any(s.get("id") == server_id for s in self.config.get("loxone_servers", []))
+            if not server_found:
+                logger.error(f"Loxone server {server_id} not found")
+                return False
+            
+            self.save_config()
+            logger.info(f"Device {device_id} assigned to server {server_id}")
+            return True
+        except Exception as e:
+            logger.error(f"Error assigning device to server: {e}")
+            return False
+
+    def unassign_device_from_server(self, device_id: str, server_id: str) -> bool:
+        """Remove device assignment from a Loxone server"""
+        try:
+            for device in self.config.get("devices", []):
+                if device.get("id") == device_id:
+                    device["loxone_servers"] = [srv_id for srv_id in device.get("loxone_servers", []) if srv_id != server_id]
+                    self.save_config()
+                    logger.info(f"Device {device_id} unassigned from server {server_id}")
+                    return True
+            logger.error(f"Device {device_id} not found")
+            return False
+        except Exception as e:
+            logger.error(f"Error unassigning device from server: {e}")
+            return False
+
+    def get_device_servers(self, device_id: str) -> List[LoxoneServer]:
+        """Get all Loxone servers a device is assigned to"""
+        for device in self.config.get("devices", []):
+            if device.get("id") == device_id:
+                servers = []
+                for server_id in device.get("loxone_servers", []):
+                    server = self.get_loxone_server(server_id)
+                    if server:
+                        servers.append(server)
+                return servers
+        return []
 
     def is_first_setup(self) -> bool:
         """Check if this is the first setup (Loxone IP still at default value)"""
