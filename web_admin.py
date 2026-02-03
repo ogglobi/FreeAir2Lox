@@ -497,6 +497,24 @@ def logout():
     logger.info("✅ Admin logged out")
     return redirect('/login')
 
+@app.route('/api/auth/get-api-key', methods=['GET'])
+@require_login
+def get_api_key():
+    """Get API key for Loxone commands (only for authenticated users)"""
+    try:
+        if not config_mgr:
+            return jsonify({'error': 'Config not available'}), 500
+        
+        api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
+        if not api_key:
+            logger.error('API key not found in config')
+            return jsonify({'error': 'API key not configured'}), 500
+        
+        return jsonify({'api_key': api_key}), 200
+    except Exception as e:
+        logger.error(f'Error retrieving API key: {e}')
+        return jsonify({'error': 'Error retrieving API key'}), 500
+
 @app.route('/api/change-password', methods=['POST'])
 @require_login
 def change_password_api():
@@ -1548,7 +1566,7 @@ def api_loxone_command():
         print(f"Raw body: {request.data}", file=sys.stderr)
         print(f"Content-Type: {request.headers.get('Content-Type', 'none')}", file=sys.stderr)
         print(f"All headers: {dict(request.headers)}", file=sys.stderr)
-        
+
         # Parse request data directly - works with ANY Content-Type
         data = {}
         if request.data:

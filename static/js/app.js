@@ -4,6 +4,41 @@
 
 console.log('[APP] Script loaded');
 
+// ===== GLOBAL API KEY MANAGEMENT =====
+let globalApiKey = null;  // Store API key for Bearer token auth
+
+// Load API key from backend (called after login)
+async function loadApiKey() {
+    try {
+        const res = await fetch('/api/auth/get-api-key');
+        if (res.ok) {
+            const data = await res.json();
+            globalApiKey = data.api_key;
+            console.log('[AUTH] API key loaded successfully');
+            return true;
+        } else if (res.status === 401) {
+            // Not authenticated - redirect to login
+            console.warn('[AUTH] Not authenticated, redirecting to login');
+            window.location.href = '/login';
+            return false;
+        } else {
+            console.error('[AUTH] Failed to load API key:', res.status);
+            globalApiKey = null;
+            return false;
+        }
+    } catch (err) {
+        console.error('[AUTH] Error loading API key:', err);
+        globalApiKey = null;
+        return false;
+    }
+}
+
+// Clear API key on logout
+function clearApiKey() {
+    globalApiKey = null;
+    console.log('[AUTH] API key cleared on logout');
+}
+
 // Check if user is still logged in (called on page load)
 async function checkSession() {
     // If we're on /login or /first-setup, don't check session
@@ -120,6 +155,9 @@ const labelMap = {
 
 document.addEventListener('DOMContentLoaded', () => {
     console.log('[APP] DOM loaded');
+
+    // Load API key for command authentication
+    loadApiKey();
 
     // Initialize update status indicator
     initUpdateStatusIndicator();
@@ -1244,6 +1282,16 @@ async function setComfortLevel(level) {
             return;
         }
 
+        // Check if API key is available
+        if (!globalApiKey) {
+            console.error('[SET_COMFORT_LEVEL] API key not available, reloading...');
+            const keyLoaded = await loadApiKey();
+            if (!keyLoaded) {
+                showCommandError('Authentifizierung erforderlich - bitte neu anmelden');
+                return;
+            }
+        }
+
         console.log('[SET_COMFORT_LEVEL] Setting comfort level to:', level, 'for device:', selectedDeviceId);
 
         // Close the control modal first
@@ -1254,7 +1302,10 @@ async function setComfortLevel(level) {
 
         const res = await fetch('/api/command', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${globalApiKey}`
+            },
             body: JSON.stringify({
                 comfortLevel: level,
                 serial: selectedDeviceId  // Send selected device
@@ -1271,7 +1322,14 @@ async function setComfortLevel(level) {
             console.error('[SET_COMFORT_LEVEL] API Error:', res.status);
             try {
                 const err = await res.json();
-                showCommandError('Fehler: ' + (err.error || 'Unbekannt'));
+                if (res.status === 401) {
+                    // API key invalid - reload it
+                    console.warn('[SET_COMFORT_LEVEL] Unauthorized (401) - API key may have expired');
+                    globalApiKey = null;
+                    showCommandError('Sitzung abgelaufen - bitte neu anmelden');
+                } else {
+                    showCommandError('Fehler: ' + (err.error || 'Unbekannt'));
+                }
             } catch {
                 showCommandError('Fehler: HTTP ' + res.status);
             }
@@ -1300,6 +1358,16 @@ async function setOperatingMode(mode) {
             return;
         }
 
+        // Check if API key is available
+        if (!globalApiKey) {
+            console.error('[SET_OPERATING_MODE] API key not available, reloading...');
+            const keyLoaded = await loadApiKey();
+            if (!keyLoaded) {
+                showCommandError('Authentifizierung erforderlich - bitte neu anmelden');
+                return;
+            }
+        }
+
         console.log('[SET_OPERATING_MODE] Setting operating mode to:', mode, `(${modeNames[mode]}) for device:`, selectedDeviceId);
 
         // Close the control modal first
@@ -1310,7 +1378,10 @@ async function setOperatingMode(mode) {
 
         const res = await fetch('/api/command', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${globalApiKey}`
+            },
             body: JSON.stringify({
                 operatingMode: mode,
                 serial: selectedDeviceId  // Send selected device
@@ -1327,7 +1398,14 @@ async function setOperatingMode(mode) {
             console.error('[SET_OPERATING_MODE] API Error:', res.status);
             try {
                 const err = await res.json();
-                showCommandError('Fehler: ' + (err.error || 'Unbekannt'));
+                if (res.status === 401) {
+                    // API key invalid - reload it
+                    console.warn('[SET_OPERATING_MODE] Unauthorized (401) - API key may have expired');
+                    globalApiKey = null;
+                    showCommandError('Sitzung abgelaufen - bitte neu anmelden');
+                } else {
+                    showCommandError('Fehler: ' + (err.error || 'Unbekannt'));
+                }
             } catch {
                 showCommandError('Fehler: HTTP ' + res.status);
             }
@@ -2344,6 +2422,7 @@ async function logoutAdmin() {
     }
 
     try {
+        clearApiKey();  // Clear API key before logout
         await fetch('/logout', { method: 'POST' });
         window.location.href = '/login';
     } catch (error) {
