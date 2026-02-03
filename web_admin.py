@@ -1223,6 +1223,153 @@ def api_loxone_command_template():
         return jsonify({'error': str(e)}), 500
 
 
+# ============================================================================
+# LOXONE SERVER MANAGEMENT ENDPOINTS (v1.4.0 - Multi-Server Support)
+# ============================================================================
+
+@app.route('/api/loxone/servers', methods=['GET'])
+@require_login
+def get_loxone_servers_api():
+    """List all configured Loxone servers"""
+    try:
+        servers = config_mgr.get_loxone_servers()
+        return jsonify([s.to_dict() for s in servers]), 200
+    except Exception as e:
+        logger.error(f"Error retrieving servers: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/loxone/servers', methods=['POST'])
+@require_login
+def add_loxone_server_api():
+    """Add new Loxone server"""
+    try:
+        from config_manager import LoxoneServer
+        data = request.get_json()
+        
+        if not data.get('id') or not data.get('name') or not data.get('ip'):
+            return jsonify({'error': 'Missing required fields: id, name, ip'}), 400
+        
+        server = LoxoneServer(
+            id=data.get('id'),
+            name=data.get('name'),
+            ip=data.get('ip'),
+            port=data.get('port', 5555),
+            enabled=data.get('enabled', True),
+            api_key=data.get('api_key', str(uuid.uuid4()))
+        )
+        
+        if config_mgr.add_loxone_server(server):
+            return jsonify({'status': 'added', 'server': server.to_dict()}), 201
+        else:
+            return jsonify({'error': 'Server ID already exists'}), 400
+    except Exception as e:
+        logger.error(f"Error adding server: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/loxone/servers/<server_id>', methods=['GET'])
+@require_login
+def get_loxone_server_api(server_id):
+    """Get specific Loxone server"""
+    try:
+        server = config_mgr.get_loxone_server(server_id)
+        if server:
+            return jsonify(server.to_dict()), 200
+        return jsonify({'error': 'Server not found'}), 404
+    except Exception as e:
+        logger.error(f"Error retrieving server {server_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/loxone/servers/<server_id>', methods=['PUT'])
+@require_login
+def update_loxone_server_api(server_id):
+    """Update existing Loxone server"""
+    try:
+        from config_manager import LoxoneServer
+        data = request.get_json()
+        
+        server = LoxoneServer(
+            id=server_id,
+            name=data.get('name'),
+            ip=data.get('ip'),
+            port=data.get('port', 5555),
+            enabled=data.get('enabled', True),
+            api_key=data.get('api_key', '')
+        )
+        
+        if config_mgr.update_loxone_server(server_id, server):
+            return jsonify({'status': 'updated', 'server': server.to_dict()}), 200
+        else:
+            return jsonify({'error': 'Server not found'}), 404
+    except Exception as e:
+        logger.error(f"Error updating server {server_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/loxone/servers/<server_id>', methods=['DELETE'])
+@require_login
+def delete_loxone_server_api(server_id):
+    """Delete Loxone server"""
+    try:
+        if config_mgr.delete_loxone_server(server_id):
+            return jsonify({'status': 'deleted'}), 200
+        else:
+            return jsonify({'error': 'Server not found or cannot delete'}), 404
+    except Exception as e:
+        logger.error(f"Error deleting server {server_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/loxone/servers/<server_id>/test', methods=['POST'])
+@require_login
+def test_loxone_server_api(server_id):
+    """Test connection to Loxone server by sending test UDP packet"""
+    try:
+        server = config_mgr.get_loxone_server(server_id)
+        if not server:
+            return jsonify({'error': 'Server not found'}), 404
+        
+        try:
+            # Send test UDP packet
+            test_payload = json.dumps({'test': True, 'timestamp': datetime.now().isoformat()}, ensure_ascii=False)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(2)
+            sock.sendto(test_payload.encode('utf-8'), (server.ip, int(server.port)))
+            sock.close()
+            logger.info(f"Test packet sent to {server.name} ({server.ip}:{server.port})")
+            return jsonify({'status': 'sent', 'message': f'Test packet sent to {server.ip}:{server.port}'}), 200
+        except Exception as e:
+            logger.error(f"Failed to send test packet to {server_id}: {e}")
+            return jsonify({'status': 'failed', 'error': str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error testing server {server_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/loxone/servers/<server_id>/regenerate-key', methods=['POST'])
+@require_login
+def regenerate_server_key_api(server_id):
+    """Regenerate API key for Loxone server"""
+    try:
+        from config_manager import LoxoneServer
+        server = config_mgr.get_loxone_server(server_id)
+        if not server:
+            return jsonify({'error': 'Server not found'}), 404
+        
+        # Generate new API key
+        server.api_key = str(uuid.uuid4())
+        if config_mgr.update_loxone_server(server_id, server):
+            logger.warning(f"Regenerated API key for server {server_id}")
+            return jsonify({'status': 'regenerated', 'api_key': server.api_key}), 200
+        else:
+            return jsonify({'error': 'Failed to update server'}), 500
+    except Exception as e:
+        logger.error(f"Error regenerating key for server {server_id}: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/loxone/config', methods=['POST'])
 def api_loxone_config():
     """
@@ -1361,6 +1508,9 @@ def api_update_device(device_id):
                 dev['serial_no'] = data.get('serial_no', dev['serial_no'])
                 dev['password'] = data.get('password', dev['password'])
                 dev['enabled'] = data.get('enabled', dev.get('enabled', True))
+                # Support loxone_servers array (v1.4.0)
+                if 'loxone_servers' in data:
+                    dev['loxone_servers'] = data.get('loxone_servers', [])
                 config_mgr.save_config()
                 return jsonify({'success': True})
         return jsonify({'success': False, 'error': 'Not found'}), 404

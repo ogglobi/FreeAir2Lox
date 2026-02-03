@@ -1245,17 +1245,22 @@
                 <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick für Logs</div>
             </div>
 
-            <div class="widget online" id="loxone-widget" onclick="showLoxoneEditModal()" style="cursor: pointer;">
-                <div class="widget-header">
+            <div class="widget online" id="loxone-widget" style="cursor: pointer; position: relative;">
+                <div class="widget-header" style="display: flex; justify-content: space-between; align-items: center;">
                     <div class="widget-location">Loxone</div>
-                    <button class="btn-icon" onclick="event.stopPropagation()" title="Loxone Miniserver bearbeiten" style="background: none; border: none; color: var(--accent-green); cursor: pointer; font-size: 1.1rem; z-index: 10; position: relative;">
-                        <i class="bi bi-pencil"></i>
-                    </button>
+                    <div style="display: flex; gap: 0.5rem;">
+                        <button class="btn-icon" onclick="event.stopPropagation(); showLoxoneEditModal()" title="Loxone Miniserver bearbeiten" style="background: none; border: none; color: var(--accent-green); cursor: pointer; font-size: 1.1rem; z-index: 10; position: relative;">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="btn-icon" onclick="event.stopPropagation(); openLoxoneServersModal()" title="Server verwalten (v1.4.0)" style="background: none; border: none; color: var(--accent-green); cursor: pointer; font-size: 1.1rem; z-index: 10; position: relative;">
+                            <i class="bi bi-server"></i>
+                        </button>
+                    </div>
                 </div>
                 <div class="widget-title">Miniserver</div>
                 <div class="widget-subtitle">Status</div>
                 <div class="widget-value" id="loxone-status-text">✓</div>
-                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick zum Bearbeiten</div>
+                <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.5rem; text-align: center;">Klick zum Bearbeiten | Server verwalten</div>
             </div>
         </div>
 
@@ -1566,6 +1571,78 @@
             <div class="form-group" style="display: flex; gap: 0.75rem;">
                 <button class="btn-secondary" onclick="closeLoxoneEditModal()" style="flex: 1;">Abbrechen</button>
                 <button class="btn-primary" onclick="saveLoxoneConfigModal()" style="flex: 1;">Speichern</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loxone Server Management Modal (v1.4.0) -->
+    <div class="modal-overlay" id="loxoneServersModal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header-text">
+                <i class="bi bi-server"></i> Loxone Server Management
+                <button class="modal-close" onclick="closeLoxoneServersModal()">×</button>
+            </div>
+
+            <div style="max-height: 60vh; overflow-y: auto;">
+                <!-- Server List -->
+                <div style="margin-bottom: 1.5rem;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                        <h4 style="color: var(--accent-green); margin: 0;">Konfigurierte Server</h4>
+                        <button class="btn-primary" onclick="openAddServerModal()" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                            <i class="bi bi-plus-circle"></i> Neuer Server
+                        </button>
+                    </div>
+                    <div id="servers-list" style="display: grid; gap: 1rem;">
+                        <div style="text-align: center; color: var(--text-muted); padding: 1rem;">
+                            <i class="bi bi-hourglass-split"></i> Server werden geladen...
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display: flex; gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="closeLoxoneServersModal()" style="flex: 1;">Schließen</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Server Modal -->
+    <div class="modal-overlay" id="serverEditModal" style="display: none;">
+        <div class="modal-content">
+            <div class="modal-header-text">
+                <span id="server-modal-title">Loxone Server hinzufügen</span>
+                <button class="modal-close" onclick="closeServerEditModal()">×</button>
+            </div>
+
+            <div class="form-group">
+                <label>Server-ID (eindeutig)</label>
+                <input type="text" id="server-id-input" placeholder="z.B. default, office, kitchen" disabled style="opacity: 0.7;">
+                <div class="form-text">Wird beim Erstellen festgelegt und kann nicht geändert werden</div>
+            </div>
+            <div class="form-group">
+                <label>Server-Name</label>
+                <input type="text" id="server-name-input" placeholder="z.B. Wohnzimmer Miniserver">
+            </div>
+            <div class="form-group">
+                <label>IP-Adresse</label>
+                <input type="text" id="server-ip-input" placeholder="192.168.1.50">
+            </div>
+            <div class="form-group">
+                <label>UDP Port</label>
+                <input type="number" id="server-port-input" placeholder="5555" value="5555">
+            </div>
+            <div class="form-group" style="display: flex; align-items: center; gap: 0.5rem;">
+                <input type="checkbox" id="server-enabled-input" checked>
+                <label style="margin: 0;">Server aktiviert</label>
+            </div>
+
+            <div id="server-edit-alert" class="alert" style="display: none; margin: 1rem 0;"></div>
+
+            <div style="display: flex; gap: 0.75rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                <button class="btn-secondary" onclick="closeServerEditModal()" style="flex: 1;">Abbrechen</button>
+                <button class="btn-primary" onclick="saveServerEditModal()" style="flex: 1;" id="server-save-button">
+                    <i class="bi bi-floppy"></i> Speichern
+                </button>
             </div>
         </div>
     </div>
