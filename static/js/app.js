@@ -2177,8 +2177,8 @@ async function downloadLoxoneXml() {
     try {
         // Get assigned servers for this device (v1.4.0)
         const devicesRes = await fetch('/api/devices');
-        const devicesData = await devicesRes.json();
-        const device = devicesData.devices.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
+        const devicesArray = await devicesRes.json();
+        const device = devicesArray.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
         
         let serverId = null;
         let assignedServers = device?.loxone_servers || [];
@@ -2186,8 +2186,8 @@ async function downloadLoxoneXml() {
         // If multiple servers assigned, ask user which one to download for
         if (assignedServers.length > 1) {
             const serversRes = await fetch('/api/loxone/servers');
-            const serversData = await serversRes.json();
-            const servers = serversData.servers || [];
+            const serversArray = await serversRes.json();
+            const servers = serversArray || [];
             
             // Build dialog for server selection
             const serverOptions = servers
@@ -2262,8 +2262,8 @@ async function downloadLoxoneVirtualOut() {
     try {
         // Get assigned servers for this device (v1.4.0)
         const devicesRes = await fetch('/api/devices');
-        const devicesData = await devicesRes.json();
-        const device = devicesData.devices.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
+        const devicesArray = await devicesRes.json();
+        const device = devicesArray.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
         
         let serverId = null;
         let assignedServers = device?.loxone_servers || [];
@@ -2271,8 +2271,8 @@ async function downloadLoxoneVirtualOut() {
         // If multiple servers assigned, ask user which one to download for
         if (assignedServers.length > 1) {
             const serversRes = await fetch('/api/loxone/servers');
-            const serversData = await serversRes.json();
-            const servers = serversData.servers || [];
+            const serversArray = await serversRes.json();
+            const servers = serversArray || [];
             
             // Build dialog for server selection
             const selected = prompt(
@@ -3181,8 +3181,8 @@ async function loadServerCheckboxesForDevice(deviceId) {
         // Get all servers
         const serversRes = await fetch('/api/loxone/servers');
         if (!serversRes.ok) return '';
-        const serversData = await serversRes.json();
-        const servers = serversData.servers || [];
+        const serversArray = await serversRes.json();
+        const servers = serversArray || [];
         
         // Get assigned servers for this device - fetch ALL devices and find the one we want
         const devicesRes = await fetch('/api/devices');
