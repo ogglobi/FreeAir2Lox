@@ -1633,15 +1633,14 @@ def api_get_loxone_virtual_outputs(device_id):
         bridge_ip = get_bridge_ip()
         api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
         
-        # If server_id provided, use server-specific settings
+        # If server_id provided, use server-specific API key only (bridge_ip stays the same!)
         if server_id:
             try:
                 server = config_mgr.get_loxone_server(server_id)
                 if server:
-                    bridge_ip = server.ip
-                    api_key = server.api_key
+                    api_key = server.api_key  # Use server's API key, but NOT server's IP!
             except Exception as e:
-                logger.warning(f"[XML] Could not look up server {server_id}: {e}, using default settings")
+                logger.warning(f"[XML] Could not look up server {server_id}: {e}, using default api_key")
 
         # Generate VirtualOut XML
         from loxone_xml import generate_loxone_command_template
