@@ -2175,7 +2175,46 @@ async function downloadLoxoneXml() {
     }
 
     try {
-        const url = `/api/devices/${currentSettingsDeviceId}/loxone-xml`;
+        // Get assigned servers for this device (v1.4.0)
+        const devicesRes = await fetch('/api/devices');
+        const devicesData = await devicesRes.json();
+        const device = devicesData.devices.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
+        
+        let serverId = null;
+        let assignedServers = device?.loxone_servers || [];
+        
+        // If multiple servers assigned, ask user which one to download for
+        if (assignedServers.length > 1) {
+            const serversRes = await fetch('/api/loxone/servers');
+            const serversData = await serversRes.json();
+            const servers = serversData.servers || [];
+            
+            // Build dialog for server selection
+            const serverOptions = servers
+                .filter(s => assignedServers.includes(s.id))
+                .map(s => s.id)
+                .join('|');
+            
+            if (serverOptions) {
+                const selected = prompt(
+                    `Welcher Loxone Server?\n${servers
+                        .filter(s => assignedServers.includes(s.id))
+                        .map(s => `${s.id}: ${s.name}`)
+                        .join('\n')}`,
+                    servers.find(s => assignedServers.includes(s.id))?.id
+                );
+                if (!selected) return; // User cancelled
+                serverId = selected;
+            }
+        } else if (assignedServers.length === 1) {
+            serverId = assignedServers[0];
+        }
+
+        let url = `/api/devices/${currentSettingsDeviceId}/loxone-xml`;
+        if (serverId) {
+            url += `?server_id=${serverId}`;
+        }
+
         const response = await fetch(url);
 
         if (!response.ok) {
@@ -2221,7 +2260,39 @@ async function downloadLoxoneVirtualOut() {
     }
 
     try {
-        const url = `/api/devices/${currentSettingsDeviceId}/loxone-virtual-outputs`;
+        // Get assigned servers for this device (v1.4.0)
+        const devicesRes = await fetch('/api/devices');
+        const devicesData = await devicesRes.json();
+        const device = devicesData.devices.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
+        
+        let serverId = null;
+        let assignedServers = device?.loxone_servers || [];
+        
+        // If multiple servers assigned, ask user which one to download for
+        if (assignedServers.length > 1) {
+            const serversRes = await fetch('/api/loxone/servers');
+            const serversData = await serversRes.json();
+            const servers = serversData.servers || [];
+            
+            // Build dialog for server selection
+            const selected = prompt(
+                `Welcher Loxone Server?\n${servers
+                    .filter(s => assignedServers.includes(s.id))
+                    .map(s => `${s.id}: ${s.name}`)
+                    .join('\n')}`,
+                servers.find(s => assignedServers.includes(s.id))?.id
+            );
+            if (!selected) return; // User cancelled
+            serverId = selected;
+        } else if (assignedServers.length === 1) {
+            serverId = assignedServers[0];
+        }
+
+        let url = `/api/devices/${currentSettingsDeviceId}/loxone-virtual-outputs`;
+        if (serverId) {
+            url += `?server_id=${serverId}`;
+        }
+
         const response = await fetch(url);
 
         if (!response.ok) {

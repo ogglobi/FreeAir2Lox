@@ -1541,7 +1541,7 @@ def api_update_loxone_fields(device_id):
 
 @app.route('/api/devices/<device_id>/loxone-xml')
 def api_get_loxone_xml(device_id):
-    """Generate and return Loxone XML for a device"""
+    """Generate and return Loxone XML for a device (v1.4.0: per-server support)"""
     try:
         if not config_mgr:
             return jsonify({'error': 'No config'}), 503
@@ -1557,24 +1557,39 @@ def api_get_loxone_xml(device_id):
             logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
-        # Get bridge IP and API Key for XML
+        # Get server_id from query params (v1.4.0)
+        server_id = request.args.get('server_id', None)
+        
+        # Get bridge IP and port
         bridge_ip = get_bridge_ip()
-        api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
+        port = 5555
+        
+        # If server_id provided, use server-specific settings
+        if server_id:
+            try:
+                server = config_mgr.get_loxone_server(server_id)
+                if server:
+                    bridge_ip = server.ip
+                    port = server.port
+            except Exception as e:
+                logger.warning(f"[XML] Could not look up server {server_id}: {e}, using default settings")
 
         # Generate XML
         selected_fields = device.get('loxone_fields', [])
         xml_content = generate_loxone_xml(
             device.get('name'),
             selected_fields,
-            port=5555,
-            bridge_ip=bridge_ip
+            port=port,
+            bridge_ip=bridge_ip,
+            server_id=server_id,
+            config_mgr=config_mgr
         )
 
         if not xml_content:
             return jsonify({'error': 'Failed to generate XML'}), 400
 
         device_name = device.get('name', 'device')
-        logger.info(f"[XML] Generating Inputs XML for device '{device_name}'")
+        logger.info(f"[XML] Generating Inputs XML for device '{device_name}' (server_id={server_id})")
         xml_bytes = BytesIO(xml_content.encode('utf-8'))
         return send_file(
             xml_bytes,
@@ -1588,7 +1603,7 @@ def api_get_loxone_xml(device_id):
 
 @app.route('/api/devices/<device_id>/loxone-virtual-outputs')
 def api_get_loxone_virtual_outputs(device_id):
-    """Generate and return Loxone VirtualOut XML for a device"""
+    """Generate and return Loxone VirtualOut XML for a device (v1.4.0: per-server support)"""
     try:
         if not config_mgr:
             return jsonify({'error': 'No config'}), 503
@@ -1604,9 +1619,22 @@ def api_get_loxone_virtual_outputs(device_id):
             logger.error(f"[XML] Device '{device_id}' not found. Available: {[d.get('name') for d in devices]}")
             return jsonify({'error': 'Device not found'}), 404
 
-        # Get bridge IP and API Key for XML
+        # Get server_id from query params (v1.4.0)
+        server_id = request.args.get('server_id', None)
+        
+        # Get bridge IP and API Key
         bridge_ip = get_bridge_ip()
         api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
+        
+        # If server_id provided, use server-specific settings
+        if server_id:
+            try:
+                server = config_mgr.get_loxone_server(server_id)
+                if server:
+                    bridge_ip = server.ip
+                    api_key = server.api_key
+            except Exception as e:
+                logger.warning(f"[XML] Could not look up server {server_id}: {e}, using default settings")
 
         # Generate VirtualOut XML
         from loxone_xml import generate_loxone_command_template
@@ -1615,7 +1643,9 @@ def api_get_loxone_virtual_outputs(device_id):
             device.get('id'),
             bridge_ip=bridge_ip,
             bridge_port=80,
-            api_key=api_key
+            api_key=api_key,
+            server_id=server_id,
+            config_mgr=config_mgr
         )
 
         if not xml_content:
@@ -1624,7 +1654,7 @@ def api_get_loxone_virtual_outputs(device_id):
         # Return as XML file download
         xml_bytes = BytesIO(xml_content.encode('utf-8'))
         device_name = device.get('name', 'device')
-        logger.info(f"[XML] Generating Outputs XML for device '{device_name}'")
+        logger.info(f"[XML] Generating Outputs XML for device '{device_name}' (server_id={server_id})")
         return send_file(
             xml_bytes,
             mimetype='application/xml',

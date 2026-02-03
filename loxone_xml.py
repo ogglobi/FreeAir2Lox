@@ -60,10 +60,12 @@ def generate_loxone_xml(
     selected_fields: List[str],
     port: int = 5555,
     bridge_ip: str = "192.168.10.122",
-    device_data: Optional[Dict] = None
+    device_data: Optional[Dict] = None,
+    server_id: Optional[str] = None,
+    config_mgr = None
 ) -> Optional[str]:
     """
-    Generate Loxone-compatible XML for Virtual UDP Inputs.
+    Generate Loxone-compatible XML for Virtual UDP Inputs (v1.4.0 - Per-Server Support).
 
     Args:
         device_name: Name of the device
@@ -71,11 +73,23 @@ def generate_loxone_xml(
         port: Loxone Miniserver UDP port
         bridge_ip: FreeAir2Lox Bridge IP address (source of UDP data)
         device_data: Optional device data for future extensions
+        server_id: Optional specific Loxone server ID (v1.4.0)
+        config_mgr: Optional ConfigManager instance for server lookup (v1.4.0)
 
     Returns:
         XML string for Loxone configuration, or None on error
     """
     try:
+        # If server_id and config_mgr provided, use server-specific port
+        if server_id and config_mgr:
+            try:
+                server = config_mgr.get_loxone_server(server_id)
+                if server:
+                    port = server.port
+                    logger.info(f"Using server-specific port: {port} for server {server_id}")
+            except Exception as e:
+                logger.warning(f"Could not get server {server_id}: {e}")
+        
         xml_lines = ['<?xml version="1.0" encoding="utf-8"?>']
         xml_lines.append(f'<VirtualInUdp Title="FreeAir2Lox-{device_name}" Address="{bridge_ip}" Port="{port}">')
 
@@ -112,7 +126,9 @@ def generate_loxone_command_template(
     device_id: str,
     bridge_ip: str = "192.168.10.122",
     bridge_port: int = 80,
-    api_key: str = ""
+    api_key: str = "",
+    server_id: Optional[str] = None,
+    config_mgr = None
 ) -> str:
     """
     Generate Loxone VirtualOut XML configuration for sending commands to the Bridge.
@@ -122,11 +138,23 @@ def generate_loxone_command_template(
         device_id: Device identifier (e.g., "musik")
         bridge_ip: Bridge IP address
         bridge_port: Bridge HTTP port
-        api_key: API Key for Bearer token authentication
+        api_key: API Key for Bearer token authentication (fallback if server_id not provided)
+        server_id: Loxone server ID for per-server API key lookup (v1.4.0)
+        config_mgr: ConfigManager instance for server lookup (v1.4.0)
 
     Returns:
         XML string for Loxone VirtualOut configuration
     """
+    # Use server-specific API key if server_id provided
+    final_api_key = api_key
+    if server_id and config_mgr:
+        try:
+            server = config_mgr.get_loxone_server(server_id)
+            if server:
+                final_api_key = server.api_key
+        except Exception as e:
+            logger.warning(f"Could not look up server {server_id}: {e}, using provided api_key")
+
     address = f"http://{bridge_ip}:{bridge_port}"
     api_path = "/api/command"
 
@@ -142,7 +170,7 @@ def generate_loxone_command_template(
 
     # Build HTTP Header with API Key authentication
     # CRITICAL: HTTP headers must use \r\n (CRLF) not just \n (LF)
-    http_header = f"Authorization: Bearer {api_key}\r\nContent-Type: application/json"
+    http_header = f"Authorization: Bearer {final_api_key}\r\nContent-Type: application/json"
 
     xml_lines = [
         '<?xml version="1.0" encoding="utf-8"?>',
