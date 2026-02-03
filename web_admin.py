@@ -9,6 +9,7 @@ import os
 import socket
 import threading
 import time
+import uuid
 from collections import deque
 from datetime import datetime, timedelta
 from functools import wraps
@@ -912,6 +913,11 @@ def freeair_control_handler():
                 if cmd_device_name != device.name and cmd_device_serial != device.serial_no:
                     # Command is for a different device, don't send it
                     logger.debug(f"Ignoring command for {cmd_device_name} (current device: {device.name})")
+                    # But still remove the file since it's for a different device entirely
+                    try:
+                        os.remove(command_file)
+                    except Exception:
+                        pass
                     return "OK", 200
 
                 comfort = cmd.get('comfort_level', 2)
