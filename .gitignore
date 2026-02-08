@@ -47,6 +47,7 @@ config/FreeAir2Lox_config.json
 
 # Documentation & Internal
 docs/
+docs/Multiple_Miniservers.md
 .github/copilot-instructions.md
 
 # Docker

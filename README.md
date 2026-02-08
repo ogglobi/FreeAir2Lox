@@ -1,10 +1,11 @@
-# FreeAir2Lox-Bridge v1.3.0
+# FreeAir2Lox-Bridge v1.4.0
 
-**Eine produktionsreife Bridge zum Verbinden von FreeAir 100 Ventilationssystemen mit Loxone Smart Home Automation.**
+**Eine produktionsreife Bridge zum Verbinden von FreeAir 100 Ventilationssystemen mit Loxone Smart Home Automation. Mit Multi-Miniserver-Unterstützung.**
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker Ready](https://img.shields.io/badge/docker-ready-brightgreen.svg)]()
 [![Python 3.11+](https://img.shields.io/badge/python-3.11+-blue.svg)]()
+[![Multi-Server](https://img.shields.io/badge/v1.4.0-multi%20miniserver-green.svg)]()
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/ogglobi)
 
@@ -43,6 +44,8 @@ docker-compose logs -f freeair2lox
 | **45+ Sensoren** | ✅ | Vollständige Datenerfassung von FreeAir 100 |
 | **RSSI Monitoring** | ✅ | Signalstärke-Tracking (dBm) |
 | **Web Admin UI** | ✅ | Modernes Device-Management Interface |
+| **Multi-Miniserver** | ✅ | *v1.4.0* - Assign devices to multiple Loxone servers |
+| **Per-Server XML** | ✅ | *v1.4.0* - Generate per-server VirtualIn/Out configs |
 | **Loxone Integration** | ✅ | UDP JSON Streaming zu Loxone |
 | **Docker Ready** | ✅ | Single-Command Deployment |
 | **Multi-Device** | ✅ | Support für mehrere FreeAir Units |
@@ -51,7 +54,34 @@ docker-compose logs -f freeair2lox
 | **Umgebungsvariablen** | ✅ | Unraid/Docker Support (PUID/PGID/TZ) |
 
 ---
-## � Erfasste Daten
+
+## 🌐 Multi-Miniserver Unterstützung (v1.4.0)
+
+Mit v1.4.0 können Sie ein **FreeAir-Gerät mehreren Loxone Miniservers zuweisen**:
+
+```
+FreeAir 100 → Bridge
+                ├─→ Miniserver 1 (192.168.1.50) - Wohnzimmer
+                ├─→ Miniserver 2 (192.168.1.51) - Büro
+                └─→ Miniserver 3 (192.168.1.52) - Küche
+```
+
+### Features:
+- **Per-Device Routing**: Jedes FreeAir-Gerät kann zu 1 oder mehreren Servern senden
+- **Per-Server API-Keys**: Jeder Miniserver hat eigene UUID für sichere Authentifizierung
+- **Per-Server XML-Generierung**: Download VirtualIn/Out XML für jeden Miniserver mit korrekten Einstellungen
+- **Automat. Migration**: v1.3 Single-Server Configs → v1.4 Multi-Server (Backward Kompatibl)
+
+### Web-UI Server-Verwaltung:
+
+1. **Server-Liste ansehen**: "Loxone" Tab → "Server verwalten" Button
+2. **Neuen Server hinzufügen**: Button "Neuer Server" → IP/Port eintragen → Auto-Generated API-Key
+3. **Device zuweisen**: Device bearbeiten → Checkboxes für "Zugewiesene Loxone Server"
+4. **XML per-Server Download**: Device bearbeiten → "Sensoren"/"Befehle" → Dropdown für Server-Auswahl
+
+---
+
+## 📋 Erfasste Daten
 
 - **Temperaturen:** Außen, Zuluft, Fortluft, Abluft
 - **Feuchte:** Außen, Fortluft, Absolute Feuchte
