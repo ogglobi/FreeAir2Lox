@@ -13,7 +13,6 @@
 
 ### Anforderungen
 - **Docker + Docker Compose** (oder Python 3.11+)
-- **FreeAir 100** Ventilationsanlage
 - **Loxone Miniserver**
 
 ### 1️⃣ Starten
@@ -29,13 +28,6 @@ docker-compose up -d
 # http://localhost:8080 → First-Start Wizard
 ```
 
-### 2️⃣ Logs überprüfen
-```bash
-docker-compose logs -f freeair2lox
-```
-
----
-
 ## ✨ Features
 
 | Feature | Status | Details |
@@ -44,9 +36,8 @@ docker-compose logs -f freeair2lox
 | **45+ Sensoren** | ✅ | Vollständige Datenerfassung von FreeAir 100 |
 | **RSSI Monitoring** | ✅ | Signalstärke-Tracking (dBm) |
 | **Web Admin UI** | ✅ | Modernes Device-Management Interface |
-| **Multi-Miniserver** | ✅ | *v1.4.0* - Assign devices to multiple Loxone servers |
-| **Per-Server XML** | ✅ | *v1.4.0* - Generate per-server VirtualIn/Out configs |
-| **Loxone Integration** | ✅ | UDP JSON Streaming zu Loxone |
+| **Multi-Miniserver** | ✅ | Daten an multiple Miniserver senden per UDP |
+| **Per-Server XML** | ✅ | Automatische Virtual In-/ Outputs |
 | **Docker Ready** | ✅ | Single-Command Deployment |
 | **Multi-Device** | ✅ | Support für mehrere FreeAir Units |
 | **Command Lock System** | ✅ | Race-Condition Prevention |
@@ -70,7 +61,6 @@ FreeAir 100 → Bridge
 - **Per-Device Routing**: Jedes FreeAir-Gerät kann zu 1 oder mehreren Servern senden
 - **Per-Server API-Keys**: Jeder Miniserver hat eigene UUID für sichere Authentifizierung
 - **Per-Server XML-Generierung**: Download VirtualIn/Out XML für jeden Miniserver mit korrekten Einstellungen
-- **Automat. Migration**: v1.3 Single-Server Configs → v1.4 Multi-Server (Backward Kompatibl)
 
 ### Web-UI Server-Verwaltung:
 
@@ -91,14 +81,6 @@ FreeAir 100 → Bridge
 - **Netzwerk:** RSSI Signalstärke (dBm)
 - **Status:** Verbindungsstatus, Fehler-Flag
 - **Weitere:** Luftflow, Betriebsstunden, Systemzustände
-
-## 📚 Dokumentation
-
-| Datei | Inhalt |
-|-------|--------|
-| **[CHANGELOG.md](CHANGELOG.md)** | Version History & Features |
-| **docs/ROADMAP.md** | Geplante Features |
-| **docs/UNRAID_INSTALLATION.md** | Unraid Spezifische Installation |
 
 ## 🐳 Docker Installation
 
@@ -181,12 +163,6 @@ volumes:
   - /mnt/user/appdata/freeair2lox:/app/config
 ```
 
-**Beim Install via Unraid Community Apps:**
-- ✅ Dieser Pfad wird **automatisch erstellt** wenn nötig
-- ✅ Config wird **persistent** gespeichert
-- ✅ Auch nach Neustart/Update bleibt Config erhalten
-- ⚠️ **Nicht ändern** - ist für Unraid-Kompatibilität hart eincodiert
-
 ### System-Variablen
 | Variable | Standard | Beschreibung |
 |----------|----------|-------------|
@@ -196,24 +172,9 @@ volumes:
 | `TZ` | `UTC` | Timezone für Logs (z.B. `Europe/Berlin`) |
 | `LOG_LEVEL` | `INFO` | Log-Level: DEBUG, INFO, WARNING, ERROR |
 
-**Beispiel für Europa:**
-```yaml
-environment:
-  TZ: Europe/Berlin
-  LOG_LEVEL: INFO
-  PUID: 99
-  PGID: 100
-```
-
 ### Anwendungs-Variablen
-**WICHTIG:** FreeAir Serial, Loxone IP, Passwörter werden über die **Web-UI First-Start Wizard** konfiguriert (nicht als Env-Vars).
+**WICHTIG:** FreeAir Serial, Loxone IP, Passwörter werden über die **Web-UI First-Start Wizard** konfiguriert.
 
-**Vorteile:**
-- ✅ Sichere Konfiguration (keine Passwörter hardcoded)
-- ✅ Änderungen ohne Container Neustart
-- ✅ Multi-Device Management vereinfacht
-
----
 
 ## 🌐 Web-Interface
 
@@ -226,7 +187,6 @@ Zugriff: `http://localhost:8080`
 - ✅ Loxone Integration Preview (XML generieren)
 - ✅ Live-Log Viewer
 - ✅ Update Status Indicator (🟢 aktuell / 🟡 alt / 🔴 offline)
-- ✅ Responsive Design (Mobile/Desktop)
 
 ## 🔗 Loxone Integration
 
@@ -253,43 +213,20 @@ Die Bridge sendet alle Sensorwerte als **UDP JSON** Pakete an Loxone.
 1. **Geräte in FreeAir2Lox konfigurieren** (Web-UI → First-Start Wizard)
 2. **XML Vorlagen generieren** (Web-UI → Settings → Loxone XML exportieren)
 3. **In Loxone importieren** (Loxone Config → Virtual Inputs/Outputs)
-4. **UDP Port konfigurieren** (Standard: 5555)
+4. **Bausteinvorlage von Github für einfache Config-Konfiguration**
 
 ## 🔐 Sicherheit
 
 - ✅ AES-CBC Verschlüsselung (FreeAir Payload)
 - ✅ Session-basierte Web-UI Authentifizierung
-- ✅ Passwörter nur lokal gespeichert (nicht in Env-Vars)
+- ✅ Passwörter nur lokal gespeichert
 - ✅ UDP nur im lokalen Netzwerk (kein Internet nötig)
 - ✅ HTTPS-ready (über Reverse Proxy)
-
-## 🎯 Roadmap (v1.2.0+)
-
-- [ ] WebSocket für echtzeitliche Updates
-- [ ] Config Backup/Restore UI
-- [ ] Home Assistant Integration
-- [ ] MQTT Support
-- [ ] Grafana Dashboards
 
 ## 📝 Version History
 
 Siehe **[CHANGELOG.md](CHANGELOG.md)** für vollständige Version History
 
-### v1.1.0 (2026-01-28)
-✅ **New Features:**
-- Update Status Indicator (🟢/🟡/🔴)
-- Environment Variables Support (PUID, PGID, TZ, LOG_LEVEL)
-- Unraid Template mit APPDATA Config
-- Enhanced .gitignore
-
-### v1.0.0 (2026-01-20)
-✅ **Initial Release**
-- AES-CBC Decryption
-- 45+ Sensor Data Parsing
-- Web Admin Interface
-- Loxone UDP JSON Integration
-- Docker Deployment
-- Multi-Device Support
 
 ## 🙏 Credits
 
