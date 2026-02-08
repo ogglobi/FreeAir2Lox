@@ -1,6 +1,8 @@
 # FreeAir2Lox-Bridge v1.4.0
 
-**Eine produktionsreife Bridge zum Verbinden von FreeAir 100 Ventilationssystemen mit Loxone Smart Home Automation. Mit Multi-Miniserver-Unterstützung.**
+**Eine Bridge zum Verbinden von FreeAir 100 Ventilationssystemen mit Loxone Smart Home Automation. Mit Multi-Miniserver-Unterstützung.**
+
+https://cdn.githubraw.com/ogglobi/FreeAir2Lox/main/Screenshots/Freeair2Lox%20WebUI.png
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Docker Ready](https://img.shields.io/badge/docker-ready-brightgreen.svg)]()
