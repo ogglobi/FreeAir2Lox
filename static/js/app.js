@@ -1950,11 +1950,11 @@ async function loadDeviceEditContent(deviceId) {
                 </div>
             </div>
         `;
-        
+
         // Load and add server checkboxes (v1.4.0)
         const serverCheckboxes = await loadServerCheckboxesForDevice(deviceId);
         html += serverCheckboxes;
-        
+
         contentEl.innerHTML = html;
         document.getElementById('edit-modal-title').textContent = `Gerät bearbeiten: ${device.name}`;
     } catch (err) {
@@ -2002,7 +2002,7 @@ async function saveDeviceEditModal() {
         if (res.ok) {
             // Also save server assignments (v1.4.0)
             await saveDeviceServerAssignments(deviceId);
-            
+
             showAlert('Gerät aktualisiert', 'success');
             closeDeviceEditModal();
             setTimeout(() => {
@@ -2179,22 +2179,22 @@ async function downloadLoxoneXml() {
         const devicesRes = await fetch('/api/devices');
         const devicesArray = await devicesRes.json();
         const device = devicesArray.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
-        
+
         let serverId = null;
         let assignedServers = device?.loxone_servers || [];
-        
+
         // If multiple servers assigned, ask user which one to download for
         if (assignedServers.length > 1) {
             const serversRes = await fetch('/api/loxone/servers');
             const serversArray = await serversRes.json();
             const servers = serversArray || [];
-            
+
             // Build dialog for server selection
             const serverOptions = servers
                 .filter(s => assignedServers.includes(s.id))
                 .map(s => s.id)
                 .join('|');
-            
+
             if (serverOptions) {
                 const selected = prompt(
                     `Welcher Loxone Server?\n${servers
@@ -2264,16 +2264,16 @@ async function downloadLoxoneVirtualOut() {
         const devicesRes = await fetch('/api/devices');
         const devicesArray = await devicesRes.json();
         const device = devicesArray.find(d => d.name === currentSettingsDeviceId || d.id === currentSettingsDeviceId);
-        
+
         let serverId = null;
         let assignedServers = device?.loxone_servers || [];
-        
+
         // If multiple servers assigned, ask user which one to download for
         if (assignedServers.length > 1) {
             const serversRes = await fetch('/api/loxone/servers');
             const serversArray = await serversRes.json();
             const servers = serversArray || [];
-            
+
             // Build dialog for server selection
             const selected = prompt(
                 `Welcher Loxone Server?\n${servers
@@ -2945,17 +2945,17 @@ async function loadServersForModal() {
     try {
         const res = await fetch('/api/loxone/servers');
         if (!res.ok) throw new Error('Failed to fetch servers');
-        
+
         const servers = await res.json();
         const listEl = document.getElementById('servers-list');
-        
+
         if (!listEl) return;
-        
+
         if (servers.length === 0) {
             listEl.innerHTML = '<div style="text-align: center; color: var(--text-muted); padding: 1rem;">Noch keine Server konfiguriert</div>';
             return;
         }
-        
+
         let html = '';
         for (const server of servers) {
             const statusIcon = server.enabled ? '🟢' : '🔴';
@@ -3003,7 +3003,7 @@ function openAddServerModal() {
     document.getElementById('server-enabled-input').checked = true;
     document.getElementById('server-edit-alert').style.display = 'none';
     document.getElementById('server-save-button').onclick = () => saveNewServer();
-    
+
     const modal = document.getElementById('serverEditModal');
     if (modal) modal.style.display = 'flex';
 }
@@ -3013,9 +3013,9 @@ async function editServer(serverId) {
     try {
         const res = await fetch(`/api/loxone/servers/${serverId}`);
         if (!res.ok) throw new Error('Server nicht gefunden');
-        
+
         const server = await res.json();
-        
+
         document.getElementById('server-modal-title').textContent = `Server "${escapeHtml(server.name)}" bearbeiten`;
         document.getElementById('server-id-input').value = server.id;
         document.getElementById('server-id-input').disabled = true;
@@ -3025,7 +3025,7 @@ async function editServer(serverId) {
         document.getElementById('server-enabled-input').checked = server.enabled;
         document.getElementById('server-edit-alert').style.display = 'none';
         document.getElementById('server-save-button').onclick = () => saveEditedServer(serverId);
-        
+
         const modal = document.getElementById('serverEditModal');
         if (modal) modal.style.display = 'flex';
     } catch (err) {
@@ -3048,18 +3048,18 @@ async function saveNewServer() {
         const ip = document.getElementById('server-ip-input').value.trim();
         const port = parseInt(document.getElementById('server-port-input').value) || 5555;
         const enabled = document.getElementById('server-enabled-input').checked;
-        
+
         if (!id || !name || !ip) {
             showAlert('Bitte füllen Sie alle Pflichtfelder aus', 'warning');
             return;
         }
-        
+
         const res = await fetch('/api/loxone/servers', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ id, name, ip, port, enabled })
         });
-        
+
         if (res.ok) {
             showAlert('Server hinzugefügt', 'success');
             closeServerEditModal();
@@ -3081,18 +3081,18 @@ async function saveEditedServer(serverId) {
         const ip = document.getElementById('server-ip-input').value.trim();
         const port = parseInt(document.getElementById('server-port-input').value) || 5555;
         const enabled = document.getElementById('server-enabled-input').checked;
-        
+
         if (!name || !ip) {
             showAlert('Bitte füllen Sie alle Pflichtfelder aus', 'warning');
             return;
         }
-        
+
         const res = await fetch(`/api/loxone/servers/${serverId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name, ip, port, enabled })
         });
-        
+
         if (res.ok) {
             showAlert('Server aktualisiert', 'success');
             closeServerEditModal();
@@ -3112,12 +3112,12 @@ async function deleteServer(serverId) {
     if (!confirm('Diesen Server wirklich löschen? Geräte-Zuweisungen werden entfernt.')) {
         return;
     }
-    
+
     try {
         const res = await fetch(`/api/loxone/servers/${serverId}`, {
             method: 'DELETE'
         });
-        
+
         if (res.ok) {
             showAlert('Server gelöscht', 'success');
             await loadServersForModal();
@@ -3137,7 +3137,7 @@ async function testServer(serverId) {
         const res = await fetch(`/api/loxone/servers/${serverId}/test`, {
             method: 'POST'
         });
-        
+
         const data = await res.json();
         if (res.ok) {
             showAlert('Test-Paket gesendet ✓', 'success');
@@ -3155,12 +3155,12 @@ async function regenerateServerKey(serverId) {
     if (!confirm('API-Key wirklich neu generieren? Dies wird den aktuellen Key ungültig machen.')) {
         return;
     }
-    
+
     try {
         const res = await fetch(`/api/loxone/servers/${serverId}/regenerate-key`, {
             method: 'POST'
         });
-        
+
         const data = await res.json();
         if (res.ok) {
             showAlert('Neuer API-Key generiert ✓', 'success');
@@ -3183,7 +3183,7 @@ async function loadServerCheckboxesForDevice(deviceId) {
         if (!serversRes.ok) return '';
         const serversArray = await serversRes.json();
         const servers = serversArray || [];
-        
+
         // Get assigned servers for this device - fetch ALL devices and find the one we want
         const devicesRes = await fetch('/api/devices');
         if (!devicesRes.ok) return '';
@@ -3191,7 +3191,7 @@ async function loadServerCheckboxesForDevice(deviceId) {
         const device = devicesArray.find(d => d.id === deviceId);
         if (!device) return '<div style="color: var(--accent-red);">Gerät nicht gefunden</div>';
         const assignedServers = device.loxone_servers || [];
-        
+
         let html = `
             <div style="border-top: 1px solid var(--border-color); padding-top: 1rem; margin-top: 1rem;">
                 <h5 style="color: var(--accent-green); margin-bottom: 0.75rem;">
@@ -3199,7 +3199,7 @@ async function loadServerCheckboxesForDevice(deviceId) {
                 </h5>
                 <div style="display: grid; gap: 0.5rem;">
         `;
-        
+
         if (servers.length === 0) {
             html += '<div style="color: var(--text-muted); font-size: 0.9rem;">Noch keine Server konfiguriert</div>';
         } else {
@@ -3217,7 +3217,7 @@ async function loadServerCheckboxesForDevice(deviceId) {
                 `;
             }
         }
-        
+
         html += '</div></div>';
         return html;
     } catch (err) {
@@ -3232,20 +3232,20 @@ async function saveDeviceServerAssignments(deviceId) {
         // Get all checked server checkboxes
         const checkboxes = document.querySelectorAll(`input[id^="server-check-${deviceId}-"]`);
         const assignedServers = [];
-        
+
         checkboxes.forEach(cb => {
             if (cb.checked) {
                 assignedServers.push(cb.getAttribute('data-server-id'));
             }
         });
-        
+
         // Save to config
         const res = await fetch(`/api/devices/${deviceId}`, {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ loxone_servers: assignedServers })
         });
-        
+
         if (!res.ok) {
             console.warn('Could not save server assignments');
         }

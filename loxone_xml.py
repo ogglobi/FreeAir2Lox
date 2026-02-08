@@ -89,7 +89,7 @@ def generate_loxone_xml(
                     logger.info(f"Using server-specific port: {port} for server {server_id}")
             except Exception as e:
                 logger.warning(f"Could not get server {server_id}: {e}")
-        
+
         xml_lines = ['<?xml version="1.0" encoding="utf-8"?>']
         xml_lines.append(f'<VirtualInUdp Title="FreeAir2Lox-{device_name}" Address="{bridge_ip}" Port="{port}">')
 

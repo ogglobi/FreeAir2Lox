@@ -124,12 +124,12 @@ class ConfigManager:
     def _migrate_legacy_loxone_config(self):
         """
         Auto-migrate from v1.3 single-server config to v1.4 multi-server config.
-        
+
         v1.3 structure:
         {
             "loxone": {"ip": "192.168.1.50", "port": 5555, "enabled": True, "api_key": "..."}
         }
-        
+
         v1.4 structure:
         {
             "loxone": {...},  # Kept for backward compatibility
@@ -144,18 +144,18 @@ class ConfigManager:
                 }
             ]
         }
-        
+
         Devices get auto-assigned to "default" server on first migration.
         """
         try:
             # Check if migration already done
             if "loxone_servers" in self.config and len(self.config.get("loxone_servers", [])) > 0:
                 return  # Already migrated
-            
+
             # Initialize loxone_servers if missing
             if "loxone_servers" not in self.config:
                 self.config["loxone_servers"] = []
-            
+
             # Migrate old loxone config to new servers array
             old_loxone = self.config.get("loxone", {})
             if old_loxone and old_loxone.get("ip"):  # Only migrate if old config exists
@@ -169,12 +169,12 @@ class ConfigManager:
                 }
                 self.config["loxone_servers"] = [default_server]
                 logger.info("Migrated legacy Loxone config to multi-server format")
-            
+
             # Auto-assign all devices to "default" server if not already assigned
             for device in self.config.get("devices", []):
                 if not device.get("loxone_servers"):
                     device["loxone_servers"] = ["default"]
-            
+
             self.save_config()
             logger.info("Completed migration from v1.3 to v1.4 config format")
         except Exception as e:
@@ -305,11 +305,11 @@ class ConfigManager:
             if server.id in existing_ids:
                 logger.error(f"Loxone server ID {server.id} already exists")
                 return False
-            
+
             # Auto-generate API key if not provided
             if not server.api_key:
                 server.api_key = str(uuid.uuid4())
-            
+
             self.config["loxone_servers"].append(server.to_dict())
             self.save_config()
             logger.info(f"Loxone server {server.id} added with IP {server.ip}:{server.port}")
@@ -342,14 +342,14 @@ class ConfigManager:
                 if not remaining_servers:
                     logger.error("Cannot delete the only Loxone server (default)")
                     return False
-            
+
             # Remove server from config
             self.config["loxone_servers"] = [s for s in self.config.get("loxone_servers", []) if s.get("id") != server_id]
-            
+
             # Remove server assignments from all devices
             for device in self.config.get("devices", []):
                 device["loxone_servers"] = [srv_id for srv_id in device.get("loxone_servers", []) if srv_id != server_id]
-            
+
             self.save_config()
             logger.info(f"Loxone server {server_id} deleted and unassigned from all devices")
             return True
@@ -368,17 +368,17 @@ class ConfigManager:
                     if server_id not in device.get("loxone_servers", []):
                         device["loxone_servers"].append(server_id)
                     break
-            
+
             if not device_found:
                 logger.error(f"Device {device_id} not found")
                 return False
-            
+
             # Verify server exists
             server_found = any(s.get("id") == server_id for s in self.config.get("loxone_servers", []))
             if not server_found:
                 logger.error(f"Loxone server {server_id} not found")
                 return False
-            
+
             self.save_config()
             logger.info(f"Device {device_id} assigned to server {server_id}")
             return True

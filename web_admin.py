@@ -440,17 +440,17 @@ def before_request():
         auth_header = request.headers.get('Authorization', '')
         if auth_header.startswith('Bearer '):
             api_key = auth_header[7:]  # Remove 'Bearer ' prefix
-            
+
             # Check against ALL configured Loxone servers
             if config_mgr:
                 for server in config_mgr.get_loxone_servers():
                     if api_key == server.api_key:
                         return  # API Key valid for this server, allow request
-                
+
                 # Fallback: Check old single-server config for backward compatibility
                 if api_key == config_mgr.config.get('loxone', {}).get('api_key'):
                     return  # Old API key still valid
-        
+
         logger.warning(f"Unauthorized command request from {request.remote_addr}")
         return jsonify({'error': 'Invalid or missing API Key'}), 401
 
@@ -514,12 +514,12 @@ def get_api_key():
     try:
         if not config_mgr:
             return jsonify({'error': 'Config not available'}), 500
-        
+
         api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
         if not api_key:
             logger.error('API key not found in config')
             return jsonify({'error': 'API key not configured'}), 500
-        
+
         return jsonify({'api_key': api_key}), 200
     except Exception as e:
         logger.error(f'Error retrieving API key: {e}')
@@ -579,7 +579,7 @@ def is_device_locked(device_name: str) -> bool:
 def send_to_loxone(device_name, values):
     """
     Send device values to Loxone via UDP (v1.4.0 - Multi-Server Support)
-    
+
     Each device can be assigned to multiple Loxone servers.
     This function sends the data to ALL assigned servers.
     """
@@ -1252,10 +1252,10 @@ def add_loxone_server_api():
     try:
         from config_manager import LoxoneServer
         data = request.get_json()
-        
+
         if not data.get('id') or not data.get('name') or not data.get('ip'):
             return jsonify({'error': 'Missing required fields: id, name, ip'}), 400
-        
+
         server = LoxoneServer(
             id=data.get('id'),
             name=data.get('name'),
@@ -1264,7 +1264,7 @@ def add_loxone_server_api():
             enabled=data.get('enabled', True),
             api_key=data.get('api_key', str(uuid.uuid4()))
         )
-        
+
         if config_mgr.add_loxone_server(server):
             return jsonify({'status': 'added', 'server': server.to_dict()}), 201
         else:
@@ -1295,7 +1295,7 @@ def update_loxone_server_api(server_id):
     try:
         from config_manager import LoxoneServer
         data = request.get_json()
-        
+
         server = LoxoneServer(
             id=server_id,
             name=data.get('name'),
@@ -1304,7 +1304,7 @@ def update_loxone_server_api(server_id):
             enabled=data.get('enabled', True),
             api_key=data.get('api_key', '')
         )
-        
+
         if config_mgr.update_loxone_server(server_id, server):
             return jsonify({'status': 'updated', 'server': server.to_dict()}), 200
         else:
@@ -1336,7 +1336,7 @@ def test_loxone_server_api(server_id):
         server = config_mgr.get_loxone_server(server_id)
         if not server:
             return jsonify({'error': 'Server not found'}), 404
-        
+
         try:
             # Send test UDP packet
             test_payload = json.dumps({'test': True, 'timestamp': datetime.now().isoformat()}, ensure_ascii=False)
@@ -1363,7 +1363,7 @@ def regenerate_server_key_api(server_id):
         server = config_mgr.get_loxone_server(server_id)
         if not server:
             return jsonify({'error': 'Server not found'}), 404
-        
+
         # Generate new API key
         server.api_key = str(uuid.uuid4())
         if config_mgr.update_loxone_server(server_id, server):
@@ -1566,20 +1566,19 @@ def api_get_loxone_xml(device_id):
 
         # Get server_id from query params (v1.4.0)
         server_id = request.args.get('server_id', None)
-        
+
         # Get bridge IP and port
         bridge_ip = get_bridge_ip()
         port = 5555
-        
-        # If server_id provided, use server-specific settings
+
+        # If server_id provided, use server-specific port only (bridge_ip stays the same!)
         if server_id:
             try:
                 server = config_mgr.get_loxone_server(server_id)
                 if server:
-                    bridge_ip = server.ip
-                    port = server.port
+                    port = server.port  # Use server's port, but NOT server's IP!
             except Exception as e:
-                logger.warning(f"[XML] Could not look up server {server_id}: {e}, using default settings")
+                logger.warning(f"[XML] Could not look up server {server_id}: {e}, using default port")
 
         # Generate XML
         selected_fields = device.get('loxone_fields', [])
@@ -1628,11 +1627,11 @@ def api_get_loxone_virtual_outputs(device_id):
 
         # Get server_id from query params (v1.4.0)
         server_id = request.args.get('server_id', None)
-        
+
         # Get bridge IP and API Key
         bridge_ip = get_bridge_ip()
         api_key = config_mgr.config.get('loxone', {}).get('api_key', '')
-        
+
         # If server_id provided, use server-specific API key only (bridge_ip stays the same!)
         if server_id:
             try:
